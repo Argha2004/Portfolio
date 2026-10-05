@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Arghadeep Pakhira — Developer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <canvas id="fluid"></canvas>
+  <div class="cursor"></div>
+
+  <header class="nav">
+    <a href="#top" class="logo">AP®</a>
+    <nav>
+      <a href="#work">Work</a>
+      <a href="#about">About</a>
+      <a href="#contact">Contact</a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <p class="eyebrow reveal">Portfolio — 2026</p>
+      <h1 class="title">
+        <span class="line"><span>Arghadeep</span></span>
+        <span class="line"><span><em>Pakhira</em></span></span>
+      </h1>
+      <p class="sub reveal">Creative developer building fluid, interactive web experiences.<br/>Move your cursor.</p>
+      <div class="scroll-hint">Scroll ↓</div>
+    </section>
+
+    <section id="work" class="work">
+      <h2 class="section-title reveal">Selected Work</h2>
+      <ul class="projects">
+        <li class="project" data-color="#ff4d2e"><span class="num">01</span><span class="name">Project One</span><span class="tag">WebGL · Next.js</span></li>
+        <li class="project" data-color="#3d5afe"><span class="num">02</span><span class="name">Project Two</span><span class="tag">React · Three.js</span></li>
+        <li class="project" data-color="#00c389"><span class="num">03</span><span class="name">Project Three</span><span class="tag">Node · API</span></li>
+        <li class="project" data-color="#f5b700"><span class="num">04</span><span class="name">Project Four</span><span class="tag">Android · Kotlin</span></li>
+      </ul>
+    </section>
+
+    <section id="about" class="about">
+      <p class="big reveal">I design and engineer digital products where <em>motion</em> and <em>performance</em> live together. Replace this text with your story.</p>
+      <div class="skills reveal">
+        <span>JavaScript</span><span>TypeScript</span><span>React</span><span>Next.js</span><span>Three.js</span><span>GLSL</span><span>GSAP</span><span>Node.js</span>
+      </div>
+    </section>
+
+    <section id="contact" class="contact">
+      <p class="eyebrow reveal">Got an idea?</p>
+      <a class="mail" href="mailto:arghadeeppakhira@gmail.com">Let's talk →</a>
+      <footer>
+        <a href="#">GitHub</a><a href="#">LinkedIn</a><a href="#">Twitter</a>
+        <span>© 2026 Arghadeep Pakhira</span>
+      </footer>
+    </section>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+  <script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
+  <script src="fluid.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>
