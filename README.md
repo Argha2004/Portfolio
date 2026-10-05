@@ -65,6 +65,21 @@ To make a production build **while the dev server is running**, build into a sep
 NEXT_DIST_DIR=.next-prod npx next build
 ```
 
+## Deploying to Vercel
+
+The site is a standard Next.js app, so Vercel needs no extra configuration.
+
+1. Push this repository to GitHub (it lives at `github.com/Argha2004/Portfolio`).
+2. On [vercel.com/new](https://vercel.com/new), import the repository. Vercel detects Next.js automatically; keep the defaults (build command `next build`, no environment variables needed).
+3. Click **Deploy**. Every later push to `main` redeploys automatically, and other branches get preview URLs.
+
+Or from the command line:
+
+```bash
+npx vercel        # preview deployment (asks you to log in the first time)
+npx vercel --prod # production deployment
+```
+
 ## Project structure
 
 ```
@@ -121,4 +136,6 @@ GitHub, LinkedIn, Kaggle and ORCID logos are trademarks of their respective owne
 
 ## License
 
-© Arghadeep Pakhira. All rights reserved for the personal content: text, project write-ups and images. Third-party assets keep their own licences, listed above.
+The source code is released under the [MIT License](LICENSE).
+
+The MIT License covers the code only. The personal content (my name, résumé text, project write-ups and screenshots in `lib/` and `public/projects/`) is © Arghadeep Pakhira; please don't reuse it as your own. Third-party assets keep their own licences, listed in [Credits](#credits).
