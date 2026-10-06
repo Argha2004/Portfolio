@@ -245,6 +245,7 @@ export function TerrainCollider() {
     }
     return h;
   }, []);
+  const args = useMemo(() => [ROWS, ROWS, heights, { x: HALF * 2, y: 1, z: HALF * 2 }], [heights]);
   // Invisible wall just inside the coast keeps the car on the island
   const walls = Array.from({ length: 64 }, (_, i) => {
     const a = (i / 64) * Math.PI * 2, r = ISLAND_R + 2;
@@ -252,7 +253,9 @@ export function TerrainCollider() {
   });
   return (
     <RigidBody type="fixed" name="ground" colliders={false} friction={0.8}>
-      <HeightfieldCollider args={[ROWS, ROWS, heights, { x: HALF * 2, y: 1, z: HALF * 2 }]} />
+      {/* (args must be stable: a new scale object each render made the library rebuild the
+          heightfield, and Rapier then woke every sleeping body on the island for seconds) */}
+      <HeightfieldCollider args={args} />
       {walls.map((w, i) => <CuboidCollider key={i} args={[0.5, 3, 8]} position={w.p} rotation={[0, w.rot, 0]} />)}
     </RigidBody>
   );

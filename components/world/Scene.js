@@ -1,10 +1,10 @@
 "use client";
 import "./brunoShading"; // must run before any material compiles
 import { preloadWorld } from "./preload";
-import { Suspense, useEffect, useMemo, useRef } from "react";
+import { memo, Suspense, useEffect, useMemo, useRef } from "react";
 import gsap from "gsap";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Physics } from "@react-three/rapier";
+import { Physics, useRapier } from "@react-three/rapier";
 import { EffectComposer, Bloom, N8AO, Vignette, SMAA } from "@react-three/postprocessing";
 import * as THREE from "three";
 import { globeTags, profile } from "@/lib/data";
@@ -25,6 +25,7 @@ import { Campus, HallOfFame, EdgeLab } from "./Sections";
 import { Bombs, Fireballs } from "./Bombs";
 import { MapCapture } from "./mapCapture";
 import { createRenderer } from "./gpu";
+import { chunkInstances, syncChunks } from "./instanceChunks";
 import { Reveal } from "./Reveal";
 import { sfx } from "./sound";
 import { view, resetOrbit } from "./view";
@@ -111,6 +112,10 @@ function OrbitDrag({ revealRef }) {
       view.orbit.pitch += (e.clientY - last[1]) * 0.004;
       last = [e.clientX, e.clientY];
     };
+    // Over the canvas the move is handled here and, while dragging, kept from the 3D scene's own
+    // pointer events: those raycast every hoverable model on each move, which made dragging stutter
+    const moveCanvas = (e) => { move(e); if (view.dragging) e.stopPropagation(); };
+    const moveOutside = (e) => { if (e.target !== el) move(e); };
     let swallow = false;
     const up = () => {
       start = last = null;
@@ -120,7 +125,8 @@ function OrbitDrag({ revealRef }) {
     const click = (e) => { if (swallow) { e.stopPropagation(); swallow = false; } };
     const dbl = () => { if (revealRef.current.started && !view.cinematic) resetOrbit(); };
     el.addEventListener("pointerdown", down);
-    addEventListener("pointermove", move);
+    el.addEventListener("pointermove", moveCanvas, true);
+    addEventListener("pointermove", moveOutside);
     addEventListener("pointerup", up);
     addEventListener("blur", up);
     el.addEventListener("dblclick", dbl);
@@ -128,7 +134,8 @@ function OrbitDrag({ revealRef }) {
     return () => {
       el.removeEventListener("click", click, true);
       el.removeEventListener("pointerdown", down);
-      removeEventListener("pointermove", move);
+      el.removeEventListener("pointermove", moveCanvas, true);
+      removeEventListener("pointermove", moveOutside);
       removeEventListener("pointerup", up);
       removeEventListener("blur", up);
       el.removeEventListener("dblclick", dbl);
@@ -143,17 +150,51 @@ function OrbitDrag({ revealRef }) {
 // while the camera eases back to frame it.
 
 function Ready({ revealRef, onReady }) {
+  const { gl, scene, camera } = useThree();
   useEffect(() => {
     const r = revealRef.current;
-    if (r.started) { onReady?.(); return; }
-    r.ring = 1;
-    const tl = gsap.timeline({ delay: 0.35 });
-    tl.to(r, { ringR: 0, duration: 1.2, ease: "power4.in" })
-      .add(() => onReady?.())
-      .to(r, { radius: 7.5, duration: 2, ease: "back.out(1.7)" })
-      .to(r, { zoom: 1.05, duration: 1.25, ease: "power1.inOut" }, "<");
-    return () => tl.kill();
-  }, [revealRef, onReady]);
+    let tl = null, cancelled = false;
+    const reveal = () => {
+      if (cancelled) return;
+      if (r.started) { onReady?.(); return; }
+      r.ring = 1;
+      tl = gsap.timeline({ delay: 0.35 });
+      tl.to(r, { ringR: 0, duration: 1.2, ease: "power4.in" })
+        .add(() => onReady?.())
+        .to(r, { radius: 7.5, duration: 2, ease: "back.out(1.7)" })
+        .to(r, { zoom: 1.05, duration: 1.25, ease: "power1.inOut" }, "<");
+    };
+    // While the loader ring is still up: split the big instanced meshes into culled map cells,
+    // then compile every shader in the background (parallel compile) instead of freezing on the
+    // first frame, or mid-drive when something new comes into view. The scene is rendered through
+    // the post-processing chain, i.e. into a float target (no tone mapping, linear output), so
+    // the programs are compiled for that too.
+    (async () => {
+      await new Promise((res) => setTimeout(res, 0)); // let every component place its instances first
+      if (cancelled) return;
+      chunkInstances(scene);
+      const target = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType });
+      const prev = gl.getRenderTarget();
+      try {
+        gl.setRenderTarget(target);
+        const done = gl.compileAsync(scene, camera);
+        gl.setRenderTarget(prev);
+        await Promise.race([done, new Promise((res) => setTimeout(res, 8000))]);
+      } catch (e) {
+        gl.setRenderTarget(prev);
+        console.warn("Shader pre-compile skipped", e);
+      }
+      target.dispose();
+      reveal();
+    })();
+    return () => { cancelled = true; tl?.kill(); };
+  }, [revealRef, onReady, gl, scene, camera]);
+  // Keep chunks in step with their source meshes, and chunk meshes that appear later (race mode)
+  useFrame(() => syncChunks());
+  useEffect(() => {
+    const id = setInterval(() => chunkInstances(scene), 2500);
+    return () => clearInterval(id);
+  }, [scene]);
   return null;
 }
 
@@ -168,6 +209,21 @@ function CycleDriver() {
 // Shadow camera follows the car so shadows stay crisp everywhere on the island;
 // the sun swings around and dips with the cycle (his Lighting.update)
 const SUN_DIST = Math.hypot(...SUN_DIR);
+// Anything knocked through the ground (or off the island) is switched off instead of falling
+// forever and costing a physics step every frame
+function FallGuard({ carRef }) {
+  const { world } = useRapier();
+  useEffect(() => {
+    const id = setInterval(() => {
+      world.bodies.forEach((b) => {
+        if (b.isDynamic() && b.isEnabled() && b !== carRef.current && b.translation().y < -40) b.setEnabled(false);
+      });
+    }, 2000);
+    return () => clearInterval(id);
+  }, [world, carRef]);
+  return null;
+}
+
 function Sun({ carRef }) {
   const light = useRef(), hemi = useRef();
   useFrame(() => {
@@ -193,7 +249,7 @@ function Sun({ carRef }) {
   );
 }
 
-export default function Scene({ carRef, lapRef, trailRef, revealRef, zone, setZone, onDiscover, onFlipped, onReady, quality = "high", race = 0 }) {
+function Scene({ carRef, lapRef, trailRef, revealRef, zone, setZone, onDiscover, onFlipped, onReady, quality = "high", race = 0 }) {
   // Leaving a pad closes its panel after a short grace period, so bumping around on the pad's
   // edge doesn't flicker it; re-entering cancels the close (and doesn't replay the chime)
   const leaving = useRef({});
@@ -224,6 +280,7 @@ export default function Scene({ carRef, lapRef, trailRef, revealRef, zone, setZo
         <BladeGrass focusRef={carRef} />
 
         <Physics gravity={[0, -20, 0]}>
+          <FallGuard carRef={carRef} />
           <TerrainCollider />
           <Roads />
           <SpawnGarden center={[SPAWN[0], SPAWN[2]]} />
@@ -282,3 +339,7 @@ export default function Scene({ carRef, lapRef, trailRef, revealRef, zone, setZo
     </Canvas>
   );
 }
+
+// Memoised: the HUD's own state (song, time of day, weather, discoveries, flip hint…) changes
+// often and used to re-render the whole 3D tree each time; the scene only needs its own props.
+export default memo(Scene);
