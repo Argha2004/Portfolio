@@ -13,7 +13,7 @@ There is also a conventional **classic view** at `/about` for anyone who'd rathe
   - Skills Camp, Research Arena and Design Graveyard.
   - The Village, home of About Me.
   - Contact plinth with statues for GitHub, LinkedIn, Kaggle, ORCID and Mail.
-  - Out by the adventure trail: the Campus (education), the Hall of Fame (awards & certifications) and the Edge AI Lab (research interests).
+  - Out by the adventure trail: the Campus (education) and the Hall of Fame (awards & certifications).
 - **Atmosphere:**
   - Stylised shading, wind-blown grass and water.
   - A 4-minute day/night cycle.
@@ -115,7 +115,7 @@ legacy/                Earlier design experiments (not used by the site)
 | `zones.js`, `trackData.js`, `trailData.js` | Island layout: districts, ponds, circuit and trail paths |
 | `areas.js`, `interactive.js` | Projects board and contact statues, plus the "press Enter" points |
 | `Districts.js`, `Roads.js`, `Circuit.js`, `Trail.js`, `Props.js` | Scenery, tracks and the road junctions into the circuit |
-| `Sections.js` | Campus, Hall of Fame and Edge AI Lab |
+| `Sections.js` | Campus and Hall of Fame |
 | `Bombs.js` | Explosive crates, fireballs and chain reactions |
 | `dayCycle.js`, `weather.js`, `Precipitation.js` | Day/night cycle, weather model, rain, snow and lightning |
 | `brunoShading.js`, `Reveal.js` | Global stylised shading and the intro reveal / fog pass |

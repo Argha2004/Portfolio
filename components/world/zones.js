@@ -81,7 +81,6 @@ const section = (x, z, r) => ({ center: [x, z], r, yaw: Math.atan2(CAM_OFFSET[0]
 export const SECTIONS = {
   campus: section(154, 50, 14),    // education
   fame: section(-34, -160, 14),    // awards & certifications
-  lab: section(-151, 32, 12),      // research interests
 };
 // a point given in a section's local frame (x across, z towards the island centre) → world [x, z]
 const ground = ([x, z]) => [x, 0, z];
@@ -124,7 +123,6 @@ export const ZONES = {
   contact: { id: "contact", pos: [SOCIAL_CENTER[0], 0, SOCIAL_CENTER[1]], label: "CONTACT", color: "#5d8ff0" },
   education: { id: "education", pos: ground(sectionPoint(SECTIONS.campus, 0, 7)), label: "EDUCATION", color: "#6ec6ff" },
   achievements: { id: "achievements", pos: ground(sectionPoint(SECTIONS.fame, 0, 7)), label: "HALL OF FAME", color: "#ffc93c" },
-  interests: { id: "interests", pos: ground(sectionPoint(SECTIONS.lab, 0, 6)), label: "EDGE AI LAB", color: "#3ddc97" },
 };
 
 // Everything the visitor can discover (for the "Discovered n / N" counter)

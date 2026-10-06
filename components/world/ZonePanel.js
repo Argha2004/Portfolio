@@ -1,5 +1,5 @@
 "use client";
-import { profile, socials, skills, education, coursework, publication, awards, certifications, interests, pillars } from "@/lib/data";
+import { profile, socials, skills, education, coursework, publication, awards, certifications } from "@/lib/data";
 import { TLink } from "../Transition";
 
 // Info panel for the spotlight pad the car is parked on
@@ -61,16 +61,6 @@ export default function ZonePanel({ zone }) {
             </li>
           ))}
         </ul>
-      </>
-    );
-  }
-  if (zone === "interests") {
-    return (
-      <>
-        <span className="panel-kicker">Edge AI Lab</span>
-        <h2>What I&apos;m exploring</h2>
-        <div className="panel-tags">{interests.map((t) => <span key={t}>{t}</span>)}</div>
-        <dl className="panel-list">{pillars.map((p) => <div key={p.title}><dt>{p.title}</dt><dd>{p.items}</dd></div>)}</dl>
       </>
     );
   }

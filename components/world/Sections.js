@@ -4,7 +4,7 @@ import { useFrame } from "@react-three/fiber";
 import { Text } from "@react-three/drei";
 import { RigidBody, CuboidCollider } from "@react-three/rapier";
 import * as THREE from "three";
-import { education, coursework, awards, certifications, interests } from "@/lib/data";
+import { education, coursework, awards, certifications } from "@/lib/data";
 import { SECTIONS, ZONES, sectionPoint } from "./zones";
 import { Pad, FONT, FONT_REG } from "./Props";
 import { DistrictSign } from "./Districts";
@@ -12,7 +12,7 @@ import { Instanced, model, SCALE } from "./kit";
 import { Lanterns, Bushes, Trees, Benches } from "./bruno";
 
 // ───────── Three sections out between the circuit and the adventure trail ─────────
-// Campus (education), Hall of Fame (awards & certifications) and the Edge AI Lab (interests).
+// Campus (education) and Hall of Fame (awards & certifications).
 // Each is built in its own frame whose local +Z faces the (fixed-angle) camera, so the spotlight
 // pad sits at the front and everything readable stands behind it, facing the viewer.
 // Static pieces have colliders reaching the ground, so nothing overhangs at roof height.
@@ -190,103 +190,6 @@ export function HallOfFame({ zone, onEnter, onExit }) {
       <Bushes items={[at(sec, -12, -8), at(sec, 12, -8), at(sec, -12.5, 3, { s: 0.8 }), at(sec, 12.5, 3, { s: 0.8 })]} />
       <Pad {...ZONES.achievements} position={ZONES.achievements.pos} active={zone === "achievements"} onEnter={onEnter} onExit={onExit} />
       <DistrictSign position={at(sec, -7, 11).p} rotation={sec.yaw} title="HALL OF FAME" subtitle="Awards & certifications" color="#8a5a1f" />
-    </>
-  );
-}
-
-// ───────── Edge AI Lab: a giant microchip, a Raspberry Pi, glowing monoliths for each interest ─────────
-const GLOW = ["#3ddc97", "#6ec6ff", "#c86bff"];
-
-function Microchip({ position }) {
-  const pins = useMemo(() => {
-    const out = [];
-    for (let i = 0; i < 7; i++) {
-      const o = -2.4 + i * 0.8;
-      out.push([o, 3.45, 0], [o, -3.45, 0], [3.45, o, Math.PI / 2], [-3.45, o, Math.PI / 2]);
-    }
-    return out;
-  }, []);
-  const core = useRef();
-  useFrame((st) => { if (core.current) core.current.emissiveIntensity = 0.8 + Math.sin(st.clock.elapsedTime * 2.2) * 0.5; });
-  return (
-    <group position={position}>
-      <Block size={[6.2, 0.55, 6.2]} position={[0, 0]} color="#25212b" />
-      <mesh position={[0, 0.6, 0]} receiveShadow><boxGeometry args={[4.6, 0.1, 4.6]} /><meshLambertMaterial color="#34303b" /></mesh>
-      <mesh position={[0, 0.66, 0]} rotation-x={-Math.PI / 2}>
-        <planeGeometry args={[2.2, 2.2]} />
-        <meshLambertMaterial ref={core} color="#123a2c" emissive="#3ddc97" emissiveIntensity={1} />
-      </mesh>
-      <Text position={[0, 0.67, 1.65]} rotation-x={-Math.PI / 2} font={FONT} fontSize={0.62} color="#3ddc97" anchorX="center" anchorY="middle">EDGE AI</Text>
-      <Text position={[0, 0.67, -1.6]} rotation-x={-Math.PI / 2} font={FONT_REG} fontSize={0.26} color="#cfc7d6" anchorX="center" anchorY="middle">INT8 · ONNX · YOLO11</Text>
-      {pins.map(([x, z, r], i) => (
-        <mesh key={i} position={[x, 0.22, z]} rotation-y={r} castShadow><boxGeometry args={[0.32, 0.14, 0.9]} /><meshLambertMaterial color="#e0b04a" /></mesh>
-      ))}
-    </group>
-  );
-}
-
-function RaspberryPi({ position, rotation }) {
-  return (
-    <group position={position} rotation-y={rotation}>
-      <Block size={[4.4, 0.55, 3]} position={[0, 0]} color="#1f8a4c">
-        <mesh position={[-0.6, 0.62, 0.1]} castShadow><boxGeometry args={[0.9, 0.12, 0.9]} /><meshLambertMaterial color="#1c1a1e" /></mesh>
-        <mesh position={[0.6, 0.6, -0.2]}><boxGeometry args={[0.7, 0.1, 0.5]} /><meshLambertMaterial color="#1c1a1e" /></mesh>
-        {[0.55, -0.35].map((z) => <mesh key={z} position={[1.8, 0.85, z]} castShadow><boxGeometry args={[0.9, 0.6, 0.75]} /><meshLambertMaterial color="#c9c4c9" /></mesh>)}
-        <mesh position={[-0.4, 0.68, -1.25]}><boxGeometry args={[3.2, 0.2, 0.22]} /><meshLambertMaterial color="#1c1a1e" /></mesh>
-        <Text position={[-0.6, 0.57, 1.05]} rotation-x={-Math.PI / 2} font={FONT} fontSize={0.24} color="#eaf7ee" anchorX="center" anchorY="middle">Raspberry Pi</Text>
-      </Block>
-    </group>
-  );
-}
-
-function Monolith({ label, position, rotation, color }) {
-  const glow = useRef();
-  useFrame((st) => { if (glow.current) glow.current.emissiveIntensity = 1.6 + Math.sin(st.clock.elapsedTime * 1.7 + position[0]) * 0.6; });
-  return (
-    <group position={position} rotation-y={rotation}>
-      <Block size={[2.3, 2.9, 0.5]} position={[0, 0]} color="#2b2730">
-        <Text position={[0, 1.55, 0.26]} font={FONT} fontSize={0.22} color="#f3ece4" anchorX="center" anchorY="middle" maxWidth={2} textAlign="center">{label}</Text>
-      </Block>
-      <mesh position={[0, 2.97, 0]}>
-        <boxGeometry args={[2.3, 0.14, 0.52]} />
-        <meshLambertMaterial ref={glow} color={color} emissive={color} emissiveIntensity={1.6} />
-      </mesh>
-    </group>
-  );
-}
-
-function Dish({ position }) {
-  return (
-    <group position={position}>
-      <RigidBody type="fixed" colliders={false}><CuboidCollider args={[0.25, 1.7, 0.25]} position={[0, 1.7, 0]} /></RigidBody>
-      <mesh position-y={1.7} castShadow><cylinderGeometry args={[0.13, 0.2, 3.4, 10]} /><meshLambertMaterial color="#d9d2cb" /></mesh>
-      <group position-y={3.6} rotation={[-0.7, 0.6, 0]}>
-        <mesh castShadow><sphereGeometry args={[1.5, 28, 10, 0, Math.PI * 2, 0, 0.75]} /><meshLambertMaterial color="#f3ece4" side={2} /></mesh>
-        <mesh position-y={-0.6}><cylinderGeometry args={[0.04, 0.04, 1.6, 6]} /><meshLambertMaterial color="#9aa3ad" /></mesh>
-        <mesh position-y={-1.38}><sphereGeometry args={[0.12, 10, 8]} /><meshLambertMaterial color="#e5423a" /></mesh>
-      </group>
-    </group>
-  );
-}
-
-export function EdgeLab({ zone, onEnter, onExit }) {
-  const sec = SECTIONS.lab;
-  const ring = useMemo(() => interests.map((label, i) => {
-    const a = Math.PI * (1.15 + (i / Math.max(interests.length - 1, 1)) * 0.7); // a half circle behind the chip
-    return { label, x: Math.cos(a) * 8.6, z: Math.sin(a) * 8.6 + 0.5, r: -a - Math.PI / 2, color: GLOW[i % GLOW.length] };
-  }), []);
-  return (
-    <>
-      <Frame sec={sec}>
-        <Microchip position={[0, 0, -2]} />
-        {ring.map((m) => <Monolith key={m.label} label={m.label} position={[m.x, 0, m.z]} rotation={m.r} color={m.color} />)}
-        <RaspberryPi position={[-7.6, 0, 3.4]} rotation={0.5} />
-        <Dish position={[8.2, 0, 3]} />
-      </Frame>
-      <Lanterns items={[at(sec, -3, 8.5, { r: 0 }), at(sec, 3, 8.5, { r: 2 })]} />
-      <Bushes items={[at(sec, -11, 2), at(sec, 11, -1, { s: 0.85 })]} a="#7cc46a" b="#a8d86a" />
-      <Pad {...ZONES.interests} position={ZONES.interests.pos} active={zone === "interests"} onEnter={onEnter} onExit={onExit} />
-      <DistrictSign position={at(sec, 6.5, 10).p} rotation={sec.yaw} title="EDGE AI LAB" subtitle="What I'm exploring" color="#1f6b4a" />
     </>
   );
 }

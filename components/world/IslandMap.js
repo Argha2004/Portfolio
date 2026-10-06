@@ -29,7 +29,6 @@ function useLocations() {
       { name: "Trail", at: [trail.p.x, 0, trail.p.z], go: { x: trail.p.x, z: trail.p.z, yaw: Math.atan2(-trail.t.x, -trail.t.z) } },
       { name: "Campus", ...sec("campus", "education") },
       { name: "Hall of Fame", ...sec("fame", "achievements") },
-      { name: "Edge AI Lab", ...sec("lab", "interests") },
     ].map((l) => ({ ...l, map: worldToMap(l.at[0], l.at[2]) }));
   }, []);
 }

@@ -21,7 +21,7 @@ import Trail from "./Trail";
 import Trackside from "./Trackside";
 import RaceMode from "./RaceMode";
 import { SkillsCamp, ResearchArena, DesignGraveyard, Village, Outskirts, SpawnGarden } from "./Districts";
-import { Campus, HallOfFame, EdgeLab } from "./Sections";
+import { Campus, HallOfFame } from "./Sections";
 import { Bombs, Fireballs } from "./Bombs";
 import { MapCapture } from "./mapCapture";
 import { createRenderer } from "./gpu";
@@ -304,10 +304,9 @@ function Scene({ carRef, lapRef, trailRef, revealRef, zone, setZone, onDiscover,
           <DesignGraveyard {...zp} />
           <Village {...zp} />
           <Outskirts />
-          {/* New sections out by the trail: education, awards & certifications, interests */}
+          {/* Sections out by the trail: education, awards & certifications */}
           <Campus {...zp} />
           <HallOfFame {...zp} />
-          <EdgeLab {...zp} />
           {/* Bruno's explosive crates, scattered all over the island */}
           <Bombs />
           {/* ...and around the circuit, with his other knock-over obstacles */}
