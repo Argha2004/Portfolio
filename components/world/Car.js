@@ -30,6 +30,7 @@ const up = new THREE.Vector3();
 const q = new THREE.Quaternion();
 const fwd = new THREE.Vector3();
 const tmp = new THREE.Vector3();
+const qInv = new THREE.Quaternion();
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
 
@@ -40,7 +41,7 @@ export default function Car({ carRef, onFlipped }) {
   const spinRefs = useRef([]);
   const strutRefs = useRef([]);
   const partsRef = useRef(null);
-  const state = useRef({ speed: 0, throttle: 0, slip: 0, upsideFor: 0, boosting: false, flipped: false });
+  const state = useRef({ speed: 0, throttle: 0, slip: 0, upsideFor: 0, boosting: false, flipped: false, hold: true, settle: 0 });
   const { world } = useRapier();
 
   useEffect(() => {
@@ -49,8 +50,8 @@ export default function Car({ carRef, onFlipped }) {
     const v = world.createVehicleController(rb);
     WHEELS.forEach((w, i) => {
       v.addWheel({ x: w.x, y: HARDPOINT_Y, z: w.z }, { x: 0, y: -1, z: 0 }, { x: -1, y: 0, z: 0 }, SUSP_REST, WHEEL_R);
-      v.setWheelSuspensionStiffness(i, 26);
-      v.setWheelSuspensionCompression(i, 2.4);
+      v.setWheelSuspensionStiffness(i, 32);
+      v.setWheelSuspensionCompression(i, 3.0);
       v.setWheelSuspensionRelaxation(i, 3.0);
       v.setWheelMaxSuspensionTravel(i, 0.28);
       v.setWheelMaxSuspensionForce(i, 1e5);
@@ -70,6 +71,17 @@ export default function Car({ carRef, onFlipped }) {
     const throttle = clamp(input.f - input.b - input.joyY, -1, 1) * lock;
     const steer = clamp(input.l - input.r - input.joyX, -1, 1) * lock;
     const fs = -v.currentVehicleSpeed(); // forward speed (m/s), positive = driving forward
+
+    // After a teleport / respawn the car is held where it was put down until a drive key is pressed:
+    // for the first half second it can't slide or turn at all (the landing can't nudge it off),
+    // then the parking brake keeps it there.
+    if (throttle !== 0 || steer !== 0) s.hold = false;
+    if (s.settle > 0) {
+      s.settle--;
+      const l = rb.linvel();
+      rb.setLinvel({ x: 0, y: Math.min(l.y, 0), z: 0 }, true);
+      rb.setAngvel({ x: 0, y: 0, z: 0 }, true);
+    }
     const max = input.boost ? 26 : 17;
 
     // Engine on the rear wheels; reverse is weaker; no push past top speed
@@ -83,7 +95,10 @@ export default function Car({ carRef, onFlipped }) {
     const angle = steer * 0.55 * (1 - Math.min(Math.abs(fs) / 40, 0.45));
     [0, 1].forEach((i) => v.setWheelSteering(i, angle));
 
-    const brake = input.brake || input.locked ? mass * 0.09 : throttle === 0 ? mass * 0.006 : 0;
+    // Parking brake: with no throttle and the car (nearly) stopped, the wheels are held, so it never
+    // creeps off on its own; while coasting at speed only a light drag applies
+    const parked = s.hold || (throttle === 0 && Math.abs(fs) < 0.8);
+    const brake = input.brake || input.locked || parked ? mass * 0.09 : throttle === 0 ? mass * 0.006 : 0;
     for (let i = 0; i < 4; i++) v.setWheelBrake(i, brake);
 
     v.updateVehicle(w.timestep, undefined, undefined, (c) => !c.isSensor());
@@ -125,10 +140,12 @@ export default function Car({ carRef, onFlipped }) {
     if (input.teleport) {
       const { x, z, yaw } = input.teleport;
       input.teleport = null;
-      rb.setTranslation({ x, y: 1.4, z }, true);
+      // (put down just above the road: the wheels settle on their springs instead of dropping)
+      rb.setTranslation({ x, y: 0.8, z }, true);
       rb.setRotation({ x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) }, true);
       rb.setLinvel({ x: 0, y: 0, z: 0 }, true);
       rb.setAngvel({ x: 0, y: 0, z: 0 }, true);
+      s.hold = true; s.settle = 30;
     }
     if (input.reset || t.y < -6) {
       input.reset = false;
@@ -136,18 +153,28 @@ export default function Car({ carRef, onFlipped }) {
       rb.setRotation({ x: 0, y: 0, z: 0, w: 1 }, true);
       rb.setLinvel({ x: 0, y: 0, z: 0 }, true);
       rb.setAngvel({ x: 0, y: 0, z: 0 }, true);
+      s.hold = true; s.settle = 30;
     }
 
-    // Wheels follow the suspension, steering and rolling computed by the vehicle
+    // Wheels follow the suspension, steering and rolling computed by the vehicle. When the
+    // suspension bottoms out (hard acceleration squat, landings) the reported length stops at its
+    // limit while the ground is closer still, so each wheel is also kept on top of its actual
+    // contact point: it can never be drawn sinking into the road.
+    qInv.copy(q).invert();
     WHEELS.forEach((w, i) => {
       const g = wheelRefs.current[i];
       if (!g) return;
       const len = v.wheelSuspensionLength(i) ?? SUSP_REST;
-      g.position.set(w.x, HARDPOINT_Y - len, w.z);
+      let wy = HARDPOINT_Y - len;
+      if (v.wheelIsInContact(i)) {
+        const c = v.wheelContactPoint(i);
+        if (c) wy = Math.max(wy, tmp.set(c.x - t.x, c.y - t.y, c.z - t.z).applyQuaternion(qInv).y + WHEEL_R);
+      }
+      g.position.set(w.x, wy, w.z);
       g.rotation.y = v.wheelSteering(i) ?? 0;
       // Bruno's trick: the strut only shows as far as the suspension is extended
       const strut = strutRefs.current[i];
-      if (strut) strut.scale.y = Math.max(0.01, CHASSIS_Y - (HARDPOINT_Y - len) - 0.5);
+      if (strut) strut.scale.y = Math.max(0.01, CHASSIS_Y - wy - 0.5);
       if (spinRefs.current[i]) spinRefs.current[i].rotation.z = (w.x < 0 ? -1 : 1) * (v.wheelRotation(i) ?? 0);
     });
 

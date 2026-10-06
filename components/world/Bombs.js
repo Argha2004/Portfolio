@@ -41,10 +41,10 @@ function blast(world, p, self) {
 }
 
 const isCrate = () => true;
-export function ExplosiveCrate({ position, rotation = 0 }) {
+export function ExplosiveCrate({ position, rotation = 0, scale = 1 }) {
   const { obj, box } = usePiece(B("explosiveCrates"), isCrate);
   const clone = useMemo(() => obj.clone(true), [obj]);
-  const half = useMemo(() => box.getSize(new THREE.Vector3()).multiplyScalar(0.5).toArray(), [box]);
+  const half = useMemo(() => box.getSize(new THREE.Vector3()).multiplyScalar(0.5 * scale).toArray(), [box, scale]);
   const body = useRef();
   const st = useRef({ armed: false, done: false, timer: 0 });
   const [gone, setGone] = useState(false);
@@ -97,7 +97,7 @@ export function ExplosiveCrate({ position, rotation = 0 }) {
   return (
     <RigidBody ref={body} position={position} rotation={[0, rotation, 0]} colliders={false} linearDamping={0.3} angularDamping={0.4} onCollisionEnter={onCollisionEnter}>
       <CuboidCollider args={half} density={0.3} friction={0.8} />
-      <primitive object={clone} />
+      <primitive object={clone} scale={scale} />
     </RigidBody>
   );
 }

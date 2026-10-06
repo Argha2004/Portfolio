@@ -34,7 +34,7 @@ function useLocations() {
   }, []);
 }
 
-export default function IslandMap({ carRef, onClose }) {
+export default function IslandMap({ carRef, onClose, onGo }) {
   const [src, setSrc] = useState(null);
   const [loaded, setLoaded] = useState(false);
   const player = useRef();
@@ -68,6 +68,7 @@ export default function IslandMap({ carRef, onClose }) {
 
   const go = (l) => {
     input.teleport = l.go;
+    onGo?.(l);
     sfx.click?.();
     onClose();
   };

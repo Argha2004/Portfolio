@@ -1,8 +1,9 @@
 "use client";
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { RigidBody, CuboidCollider } from "@react-three/rapier";
-import { Text, Text3D, Center, useFont } from "@react-three/drei";
+import { Text, useFont } from "@react-three/drei";
+import { TextGeometry } from "three-stdlib";
 import * as THREE from "three";
 import { cycle } from "./dayCycle";
 import { LightPools } from "./bruno";
@@ -26,7 +27,8 @@ export function GroundText({ children, position, size = 0.9, rotation = 0, color
 // turn into a neon sign at night: faces glow warm white, sides glow orange (picked up by the
 // bloom), and a soft pool of light spreads on the ground under each row.
 const FONT_3D = "/fonts/helvetiker_bold.typeface.json";
-const signFace = new THREE.MeshLambertMaterial({ color: "#fff3e8", emissive: "#ffe2b8", emissiveIntensity: 0 });
+// (a little self-glow by day too, so the cream faces don't turn fully into the shadow tint)
+const signFace = new THREE.MeshLambertMaterial({ color: "#fff3e8", emissive: "#ffe2b8", emissiveIntensity: 0.22 });
 const signSide = new THREE.MeshLambertMaterial({ color: "#ff6a4d", emissive: "#ff5a2e", emissiveIntensity: 0 });
 
 export function Letters({ lines = ["ARGHADEEP", "PAKHIRA"], x = 0, z = -9, size = 1.6, gap = 0.16, rowGap = 2.7 }) {
@@ -48,22 +50,36 @@ export function Letters({ lines = ["ARGHADEEP", "PAKHIRA"], x = 0, z = -9, size 
   }), [rows, x]);
   useFrame(() => {
     const n = cycle.nightAmount;
-    signFace.emissiveIntensity = n * 1.25;
+    signFace.emissiveIntensity = 0.22 + n * 1.05;
     signSide.emissiveIntensity = 0.05 + n * 1.1;
   });
-  const h = size * 0.72; // cap height of the bold face
+  // One geometry per distinct glyph, centred on its own bounds; the collider is those exact
+  // bounds, so each letter sits right on the ground instead of poking through it
+  const glyphs = useMemo(() => {
+    const out = {};
+    for (const row of rows) for (const l of row.letters) {
+      if (l.ch === " " || out[l.ch]) continue;
+      const g = new TextGeometry(l.ch, { font, size, height: 0.7, bevelEnabled: true, bevelSize: 0.05, bevelThickness: 0.06, bevelSegments: 3, curveSegments: 10 });
+      g.computeBoundingBox();
+      const half = g.boundingBox.getSize(new THREE.Vector3()).multiplyScalar(0.5);
+      g.center();
+      out[l.ch] = { geometry: g, half: half.toArray() };
+    }
+    return out;
+  }, [rows, font, size]);
+  useEffect(() => () => Object.values(glyphs).forEach((g) => g.geometry.dispose()), [glyphs]);
   return (
     <>
-      {rows.flatMap((row) => row.letters.map((l, i) => l.ch === " " ? null : (
-        <RigidBody key={`${row.z}-${i}`} colliders={false} position={[l.x, h / 2 + 0.03, l.z]} linearDamping={0.4} angularDamping={0.4}>
-          <CuboidCollider args={[l.w * 0.46, h / 2, 0.38]} density={0.6} friction={0.6} />
-          <Center>
-            <Text3D font={FONT_3D} size={size} height={0.7} bevelEnabled bevelSize={0.05} bevelThickness={0.06} bevelSegments={3} curveSegments={10} material={[signFace, signSide]} castShadow receiveShadow>
-              {l.ch}
-            </Text3D>
-          </Center>
-        </RigidBody>
-      )))}
+      {rows.flatMap((row) => row.letters.map((l, i) => {
+        const gl = glyphs[l.ch];
+        if (!gl) return null;
+        return (
+          <RigidBody key={`${row.z}-${i}`} colliders={false} position={[l.x, gl.half[1] + 0.005, l.z]} linearDamping={0.4} angularDamping={0.4}>
+            <CuboidCollider args={gl.half} density={0.6} friction={0.6} />
+            <mesh geometry={gl.geometry} material={[signFace, signSide]} castShadow receiveShadow />
+          </RigidBody>
+        );
+      }))}
       <LightPools points={pools} radius={4.5} color="#ff9a5c" strength={0.9} />
     </>
   );

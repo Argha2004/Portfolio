@@ -9,7 +9,7 @@ const COUNT = 18;
 
 const CONTROL = Array.from({ length: COUNT }, (_, i) => {
   const a = (i / COUNT) * Math.PI * 2 + Math.sin(i * 2.3) * 0.06;
-  const r = 182 + (i % 2 ? 16 : -14) + Math.sin(i * 1.7) * 5;
+  const r = 199 + Math.sin(i * 1.7) * 4; // (a steady radius: the circuit's north switchback reaches out to ~175 m)
   return new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r);
 });
 

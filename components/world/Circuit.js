@@ -4,7 +4,7 @@ import { useFrame } from "@react-three/fiber";
 import { RigidBody, CuboidCollider } from "@react-three/rapier";
 import { Text } from "@react-three/drei";
 import * as THREE from "three";
-import { samples, SAMPLE_COUNT as N, TRACK_WIDTH, RUNOFF, BARRIER_OFFSET, kerbAt, START_INDEX, nearestIndex } from "./trackData";
+import { samples, SAMPLE_COUNT as N, TRACK_WIDTH, RUNOFF, BARRIER_OFFSET, kerbAt, START_INDEX, nearestIndex, apexes } from "./trackData";
 import { FONT, FONT_REG } from "./Props";
 import { sfx } from "./sound";
 
@@ -67,6 +67,7 @@ function checkerTexture() {
 }
 
 const RED = new THREE.Color("#d8231c"), WHITE = new THREE.Color("#f6f1ea");
+const GRASS = new THREE.Color("#93a33c"), GRAVEL = new THREE.Color("#f0d6a4");
 const stripe = (i) => (Math.floor(samples[i].s / 1.6) % 2 ? RED : WHITE);
 
 // ───────── Surfaces: asphalt, edge lines, kerbs, run-off ─────────
@@ -78,7 +79,11 @@ function Surfaces() {
       ribbon({ from: HW, to: HW + KERB_W, y: 0.06, colorAt: stripe, include: (i) => kerbAt[i] }),
       ribbon({ from: -HW - KERB_W, to: -HW, y: 0.06, colorAt: stripe, include: (i) => kerbAt[i] }),
     ],
-    runoff: [ribbon({ from: HW, to: HW + RUNOFF, y: 0.02 }), ribbon({ from: -HW - RUNOFF, to: -HW, y: 0.02 })],
+    // run-off: grass strips beside the straights, gravel traps on the outside of every corner
+    runoff: [
+      ribbon({ from: HW, to: HW + RUNOFF, y: 0.02, colorAt: (i) => (kerbAt[i] && samples[i].turn === -1 ? GRAVEL : GRASS) }),
+      ribbon({ from: -HW - RUNOFF, to: -HW, y: 0.02, colorAt: (i) => (kerbAt[i] && samples[i].turn === 1 ? GRAVEL : GRASS) }),
+    ],
   }), []);
   const tex = useMemo(asphaltTexture, []);
   return (
@@ -88,7 +93,7 @@ function Surfaces() {
       </mesh>
       {lines.map((g, i) => <mesh key={i} geometry={g}><meshStandardMaterial color="#f7f2ea" roughness={0.6} /></mesh>)}
       {kerbs.map((g, i) => <mesh key={i} geometry={g} receiveShadow><meshStandardMaterial vertexColors roughness={0.55} /></mesh>)}
-      {runoff.map((g, i) => <mesh key={i} geometry={g} receiveShadow><meshStandardMaterial color="#f6cfa0" roughness={1} /></mesh>)}
+      {runoff.map((g, i) => <mesh key={i} geometry={g} receiveShadow><meshStandardMaterial vertexColors roughness={1} /></mesh>)}
     </group>
   );
 }
@@ -97,15 +102,26 @@ function Surfaces() {
 function Barriers() {
   const { walls, tyres } = useMemo(() => {
     const walls = [], tyres = [];
-    for (let i = 0; i < N; i += 3) {
+    // spaced evenly along the barrier line itself (not the centre line): on the outside of a tight
+    // corner that line is much longer, and pieces placed every 3 m of track left gaps between them
+    let prev = null, acc = 0;
+    const place = (p, i) => {
+      const s = samples[i], yaw = Math.atan2(s.t.x, s.t.z);
+      if (kerbAt[i]) tyres.push({ p, yaw }); else walls.push({ p, yaw, red: walls.length % 2 === 0 });
+    };
+    for (let i = 0; i < N; i++) {
       const s = samples[i];
-      const side = s.out; // outside of the circuit
-      const p = s.p.clone().addScaledVector(s.n, side * BARRIER_OFFSET);
-      // Gaps where the access roads to the adventure trail leave (north, east, west)
-      const gap = (Math.abs(p.x) < 7 && p.z < 0) || (Math.abs(p.z) < 7);
-      if (gap) continue;
-      const yaw = Math.atan2(s.t.x, s.t.z);
-      if (kerbAt[i]) tyres.push({ p, yaw }); else walls.push({ p, yaw, red: (i / 3) % 2 < 1 });
+      // (gaps for the avenues / access roads, and the switchback strands share one wall: see trackData)
+      if (!s.wall) { prev = null; continue; }
+      const p = s.p.clone().addScaledVector(s.n, s.out * BARRIER_OFFSET); // outside of the circuit
+      if (!prev) { place(p, i); prev = p; acc = 0; continue; }
+      let d = prev.distanceTo(p);
+      while (acc + d >= 3) { // a piece exactly every 3 m along the line
+        const q = prev.clone().lerp(p, (3 - acc) / d);
+        place(q, i);
+        prev = q; d = q.distanceTo(p); acc = 0;
+      }
+      acc += d; prev = p;
     }
     return { walls, tyres };
   }, []);
@@ -151,6 +167,60 @@ function Barriers() {
         {walls.map((w, i) => <CuboidCollider key={`w${i}`} args={[0.25, 0.6, 1.6]} position={[w.p.x, 0.6, w.p.z]} rotation={[0, w.yaw, 0]} />)}
         {tyres.map((w, i) => <CuboidCollider key={`t${i}`} args={[1.45, 0.6, 1.6]} position={[w.p.x, 0.6, w.p.z]} rotation={[0, w.yaw, 0]} />)}
       </RigidBody>
+    </group>
+  );
+}
+
+// ───────── Braking boards: 3-2-1 (300 / 200 / 100) before every hard corner after a straight ─────────
+export const brakingBoards = apexes.filter((a) => a.straightBefore).flatMap(({ i, turn }) =>
+  [[3, 66], [2, 46], [1, 26]].map(([label, back]) => {
+    const s = samples[(i - back + N) % N], side = -turn; // on the outside of the coming corner
+    const p = s.p.clone().addScaledVector(s.n, side * (HW + RUNOFF * 0.55));
+    return { label, p, yaw: Math.atan2(-s.t.x, -s.t.z) };
+  }));
+function BrakingBoards() {
+  const boards = brakingBoards;
+  return boards.map((b, i) => (
+    <group key={i} position={[b.p.x, 0, b.p.z]} rotation-y={b.yaw}>
+      <mesh position-y={0.7} castShadow><boxGeometry args={[0.12, 1.4, 0.12]} /><meshStandardMaterial color="#d9d2cb" /></mesh>
+      <mesh position-y={1.55} castShadow><boxGeometry args={[1.1, 0.8, 0.08]} /><meshStandardMaterial color="#f6f1ea" /></mesh>
+      <Text position={[0, 1.55, 0.05]} font={FONT} fontSize={0.6} color="#1d1b1d" anchorX="center" anchorY="middle">{b.label}</Text>
+      <Text position={[0, 1.55, -0.05]} rotation-y={Math.PI} font={FONT} fontSize={0.6} color="#1d1b1d" anchorX="center" anchorY="middle">{b.label}</Text>
+    </group>
+  ));
+}
+
+// ───────── Trackside billboards along the straights, just behind the barrier ─────────
+const BOARD_TEXT = ["ARGHADEEP GP", "EDGE AI", "PYTORCH", "YOLO11", "ONNX RUNTIME", "GEMINI", "RASPBERRY PI", "KAGGLE", "IEEE COMSNETS", "ANDROID"];
+const BOARD_COLORS = ["#e5423a", "#2b2730", "#5d8ff0", "#ffc93c", "#3ddc97"];
+function Billboards() {
+  const boards = useMemo(() => {
+    const out = [];
+    let run = 0, last = -999;
+    for (let i = 0; i < N; i++) {
+      run = samples[i].k < 1 / 150 ? run + 1 : 0;
+      const nearStart = Math.min((i - START_INDEX + N) % N, (START_INDEX - i + N) % N) < 34;
+      const s = samples[i], p = s.p.clone().addScaledVector(s.n, s.out * (BARRIER_OFFSET + 2.2));
+      const nearGap = Math.abs(p.x) < 12 || Math.abs(p.z) < 12; // keep the avenue / access-road gaps open
+      if (run > 25 && i - last > 30 && !nearStart && !nearGap && s.room > 5) {
+        out.push({ p, yaw: Math.atan2(-s.n.x * s.out, -s.n.z * s.out), text: BOARD_TEXT[out.length % BOARD_TEXT.length], color: BOARD_COLORS[out.length % BOARD_COLORS.length] });
+        last = i;
+      }
+    }
+    return out;
+  }, []);
+  return (
+    <group>
+      <RigidBody type="fixed" colliders={false}>
+        {boards.map((b, i) => <CuboidCollider key={i} args={[3, 1.3, 0.2]} position={[b.p.x, 1.3, b.p.z]} rotation={[0, b.yaw, 0]} />)}
+      </RigidBody>
+      {boards.map((b, i) => (
+        <group key={i} position={[b.p.x, 0, b.p.z]} rotation-y={b.yaw}>
+          {[-2.6, 2.6].map((x) => <mesh key={x} position={[x, 1, 0]} castShadow><boxGeometry args={[0.16, 2, 0.16]} /><meshStandardMaterial color="#3a343d" /></mesh>)}
+          <mesh position-y={1.9} castShadow><boxGeometry args={[6, 1.4, 0.18]} /><meshStandardMaterial color={b.color} roughness={0.6} /></mesh>
+          <Text position={[0, 1.9, 0.1]} font={FONT} fontSize={0.62} color="#fff6ec" anchorX="center" anchorY="middle" maxWidth={5.6}>{b.text}</Text>
+        </group>
+      ))}
     </group>
   );
 }
@@ -208,7 +278,7 @@ function StartFinish() {
 
 // ───────── Paddock: pit building on the inside of the straight, grandstand on the outside ─────────
 function Paddock() {
-  const s = samples[(START_INDEX - 30 + N) % N];
+  const s = samples[(START_INDEX + 30) % N]; // (ahead of the line: behind it the SW sweeper runs close)
   const yaw = Math.atan2(s.t.x, s.t.z);
   const inside = s.p.clone().addScaledVector(s.n, -s.out * (BARRIER_OFFSET + 4.5));
   const outside = samples[START_INDEX].p.clone().addScaledVector(samples[START_INDEX].n, samples[START_INDEX].out * (BARRIER_OFFSET + 4.5));
@@ -313,6 +383,8 @@ export default function Track({ carRef, lapRef }) {
     <group>
       <Surfaces />
       <Barriers />
+      <BrakingBoards />
+      <Billboards />
       <StartFinish />
       <Paddock />
       <LapTimer carRef={carRef} lapRef={lapRef} />

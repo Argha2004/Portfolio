@@ -3,7 +3,7 @@ import "./brunoShading"; // must run before any material compiles
 import { preloadWorld } from "./preload";
 import { Suspense, useEffect, useMemo, useRef } from "react";
 import gsap from "gsap";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Physics } from "@react-three/rapier";
 import { EffectComposer, Bloom, N8AO, Vignette, SMAA } from "@react-three/postprocessing";
 import * as THREE from "three";
@@ -18,6 +18,8 @@ import { BladeGrass } from "./grass";
 import Roads from "./Roads";
 import Circuit from "./Circuit";
 import Trail from "./Trail";
+import Trackside from "./Trackside";
+import RaceMode from "./RaceMode";
 import { SkillsCamp, ResearchArena, DesignGraveyard, Village, Outskirts, SpawnGarden } from "./Districts";
 import { Campus, HallOfFame, EdgeLab } from "./Sections";
 import { Bombs, Fireballs } from "./Bombs";
@@ -25,7 +27,7 @@ import { MapCapture } from "./mapCapture";
 import { createRenderer } from "./gpu";
 import { Reveal } from "./Reveal";
 import { sfx } from "./sound";
-import { view } from "./view";
+import { view, resetOrbit } from "./view";
 import { cycle, updateCycle } from "./dayCycle";
 import { weather, updateWeather } from "./weather";
 import Precipitation from "./Precipitation";
@@ -33,13 +35,19 @@ import Precipitation from "./Precipitation";
 preloadWorld(); // start every model download at once instead of one after another
 
 const OFFSET = new THREE.Vector3(...CAM_OFFSET);
+// The default chase angle as yaw / pitch / distance; dragging adds view.orbit on top
+const BASE_YAW = Math.atan2(CAM_OFFSET[0], CAM_OFFSET[2]);
+const BASE_PITCH = Math.asin(CAM_OFFSET[1] / OFFSET.length());
+const DIST = OFFSET.length();
+const PITCH_MIN = 0.18, PITCH_MAX = 1.35; // from just above the road to nearly straight down
 
 // Camera follows the car from a fixed, slightly isometric angle (like a toy diorama),
-// pulling back a little at speed.
+// pulling back a little at speed. Dragging with the left mouse button turns it around the car.
 function Follow({ carRef, revealRef }) {
   const look = useRef(new THREE.Vector3(...SPAWN));
   const want = useMemo(() => new THREE.Vector3(), []);
   const zoom = useRef(1.2);
+  const ang = useRef({ yaw: BASE_YAW, pitch: BASE_PITCH });
   useFrame((st, dt) => {
     const rb = carRef.current;
     if (!rb) return;
@@ -49,15 +57,72 @@ function Follow({ carRef, revealRef }) {
     const r = revealRef.current;
     const base = r.started ? 1 : r.zoom ?? 1.05;
     zoom.current = THREE.MathUtils.damp(zoom.current, base + Math.min(Math.hypot(v.x, v.z) / 26, 1) * 0.3, r.started ? 1.4 : 6, dt);
+    // Drag angle, eased so the view glides instead of snapping
+    const o = view.orbit, a = ang.current;
+    o.pitch = THREE.MathUtils.clamp(o.pitch, PITCH_MIN - BASE_PITCH, PITCH_MAX - BASE_PITCH);
+    a.yaw = THREE.MathUtils.damp(a.yaw, BASE_YAW + o.yaw, 12, dt);
+    a.pitch = THREE.MathUtils.damp(a.pitch, BASE_PITCH + o.pitch, 12, dt);
     // An area's cinematic shot (projects board) overrides the chase camera
     const cine = view.cinematic;
     const k = 1 - Math.exp(-(cine ? 2.2 : 6) * dt);
     if (cine) look.current.lerp(want.set(...cine.target), k);
     else look.current.lerp(want.set(t.x, Math.max(t.y, 0), t.z), k);
-    const camTarget = cine ? want.set(...cine.position) : want.copy(OFFSET).multiplyScalar(zoom.current).add(look.current);
-    st.camera.position.lerp(camTarget, 1 - Math.exp(-(cine ? 2.2 : 4) * dt));
+    const d = DIST * zoom.current;
+    const camTarget = cine ? want.set(...cine.position)
+      : want.set(Math.cos(a.pitch) * Math.sin(a.yaw), Math.sin(a.pitch), Math.cos(a.pitch) * Math.cos(a.yaw)).multiplyScalar(d).add(look.current);
+    // (follows more tightly while dragging, so turning the view feels direct)
+    st.camera.position.lerp(camTarget, 1 - Math.exp(-(cine ? 2.2 : view.dragging ? 14 : 4) * dt));
     st.camera.lookAt(look.current);
   });
+  return null;
+}
+
+// Left-button drag on the 3D view turns the camera around the car (mouse / pen; touch keeps the
+// joystick). A short click still works as a click; a double-click puts the default angle back.
+function OrbitDrag({ revealRef }) {
+  const gl = useThree((s) => s.gl);
+  useEffect(() => {
+    const el = gl.domElement;
+    let start = null, last = null;
+    const down = (e) => {
+      if (e.button !== 0 || e.pointerType === "touch" || !revealRef.current.started || view.cinematic) return;
+      start = last = [e.clientX, e.clientY];
+    };
+    const move = (e) => {
+      if (!start) return;
+      if (!view.dragging) {
+        if (Math.hypot(e.clientX - start[0], e.clientY - start[1]) < 4) return; // still a click
+        view.dragging = true;
+        el.style.cursor = "grabbing";
+      }
+      view.orbit.yaw -= (e.clientX - last[0]) * 0.006;
+      view.orbit.pitch += (e.clientY - last[1]) * 0.004;
+      last = [e.clientX, e.clientY];
+    };
+    let swallow = false;
+    const up = () => {
+      start = last = null;
+      if (view.dragging) { view.dragging = false; el.style.cursor = ""; swallow = true; setTimeout(() => { swallow = false; }, 0); }
+    };
+    // the click that ends a drag isn't a click on whatever is under the pointer
+    const click = (e) => { if (swallow) { e.stopPropagation(); swallow = false; } };
+    const dbl = () => { if (revealRef.current.started && !view.cinematic) resetOrbit(); };
+    el.addEventListener("pointerdown", down);
+    addEventListener("pointermove", move);
+    addEventListener("pointerup", up);
+    addEventListener("blur", up);
+    el.addEventListener("dblclick", dbl);
+    el.addEventListener("click", click, true);
+    return () => {
+      el.removeEventListener("click", click, true);
+      el.removeEventListener("pointerdown", down);
+      removeEventListener("pointermove", move);
+      removeEventListener("pointerup", up);
+      removeEventListener("blur", up);
+      el.removeEventListener("dblclick", dbl);
+      up();
+    };
+  }, [gl, revealRef]);
   return null;
 }
 
@@ -116,7 +181,7 @@ function Sun({ carRef }) {
   );
 }
 
-export default function Scene({ carRef, lapRef, trailRef, revealRef, zone, setZone, onDiscover, onFlipped, onReady, quality = "high" }) {
+export default function Scene({ carRef, lapRef, trailRef, revealRef, zone, setZone, onDiscover, onFlipped, onReady, quality = "high", race = 0 }) {
   // Leaving a pad closes its panel after a short grace period, so bumping around on the pad's
   // edge doesn't flicker it; re-entering cancels the close (and doesn't replay the chime)
   const leaving = useRef({});
@@ -176,6 +241,10 @@ export default function Scene({ carRef, lapRef, trailRef, revealRef, zone, setZo
           <EdgeLab {...zp} />
           {/* Bruno's explosive crates, scattered all over the island */}
           <Bombs />
+          {/* ...and around the circuit, with his other knock-over obstacles */}
+          <Trackside />
+          {/* Race mode: walls all round the circuit + obstacles on it (rebuilt for every race) */}
+          {race > 0 && <RaceMode key={race} seed={race} />}
 
           <Car carRef={carRef} onFlipped={onFlipped} />
           <Ready revealRef={revealRef} onReady={onReady} />
@@ -187,6 +256,7 @@ export default function Scene({ carRef, lapRef, trailRef, revealRef, zone, setZo
       </Suspense>
 
       <Follow carRef={carRef} revealRef={revealRef} />
+      <OrbitDrag revealRef={revealRef} />
 
       {/* Post-processing: ambient occlusion for contact depth, gentle bloom on lights, vignette */}
       <EffectComposer multisampling={0} enableNormalPass={false}>

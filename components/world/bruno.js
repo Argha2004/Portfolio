@@ -268,14 +268,14 @@ export function Benches({ items }) {
 
 // A little wall of bricks to drive through (his bricks are ~1.1 × 0.76 × 1.5 m)
 const isBrick = () => true;
-export function BrickWall({ position, rotation = 0, width = 4, rows = 3 }) {
+export function BrickWall({ position, rotation = 0, width = 4, rows = 3, scale = 1 }) {
   const bricks = [];
   const cos = Math.cos(rotation), sin = Math.sin(rotation);
   for (let row = 0; row < rows; row++) for (let i = 0; i < width - (row % 2); i++) {
-    const along = (i - (width - 1) / 2 + (row % 2) * 0.5) * 1.55;
-    bricks.push([position[0] + along * cos, 0.4 + row * 0.77, position[2] - along * sin]);
+    const along = (i - (width - 1) / 2 + (row % 2) * 0.5) * 1.55 * scale;
+    bricks.push([position[0] + along * cos, (0.4 + row * 0.77) * scale, position[2] - along * sin]);
   }
-  return bricks.map((p, i) => <DynamicPiece key={i} url={B("bricks")} test={isBrick} position={p} rotation={rotation + Math.PI / 2} density={0.35} sound="stone" />);
+  return bricks.map((p, i) => <DynamicPiece key={i} url={B("bricks")} test={isBrick} position={p} rotation={rotation + Math.PI / 2} scale={scale} density={0.35} sound="stone" />);
 }
 
 export const isFence = (o) => o.name.startsWith("fencePhysical");

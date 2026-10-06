@@ -7,6 +7,7 @@ import { useProgress } from "@react-three/drei";
 import { profile } from "@/lib/data";
 import { TLink } from "../Transition";
 import { input, useKeyboard } from "./input";
+import { resetOrbit } from "./view";
 import { SPAWN_POS } from "./zones";
 import { FETCHED, IMAGES } from "./assets";
 import { gridSpot } from "./trackData";
@@ -65,6 +66,8 @@ export default function World() {
   const [zone, setZone] = useState(null);
   const [touch, setTouch] = useState(false);
   const [flipped, setFlipped] = useState(false);
+  // Race mode: 0 = off; each "Race track → Go" bumps it, which rebuilds the course from scratch
+  const [race, setRace] = useState(0);
   const [muted, setMuted] = useState(false);
   const [musicOn, setMusicOn] = useState(true);
   // Time of day (Bruno's 4-minute day / night cycle), shown on a HUD chip that skips ahead
@@ -150,7 +153,7 @@ export default function World() {
 
   return (
     <main className="world">
-      <Scene carRef={carRef} lapRef={lapRef} trailRef={trailRef} revealRef={revealRef} zone={zone} setZone={setZone} onDiscover={onDiscover} onFlipped={setFlipped} onReady={onReady} quality={quality} />
+      <Scene carRef={carRef} lapRef={lapRef} trailRef={trailRef} revealRef={revealRef} zone={zone} setZone={setZone} onDiscover={onDiscover} onFlipped={setFlipped} onReady={onReady} quality={quality} race={race} />
 
       {/* HUD (hidden on the intro screen) */}
       <header className={`hud${started ? " on" : ""}`}>
@@ -193,11 +196,14 @@ export default function World() {
             <button type="button" className="setting" role="menuitem" onClick={() => { setMapOpen(true); setSettingsOpen(false); }}>
               <span>Map</span><kbd>M</kbd>
             </button>
-            <button type="button" className="setting setting-race" role="menuitem" onClick={() => { input.teleport = gridSpot(); setSettingsOpen(false); }} title="Drop the car on the starting grid">
+            <button type="button" className="setting setting-race" role="menuitem" onClick={() => { input.teleport = gridSpot(); setRace((r) => r + 1); setSettingsOpen(false); }} title="Race mode: the circuit is walled in and filled with obstacles, bombs and moving traps">
               <span>Race track</span><b>Go</b>
             </button>
-            <button type="button" className="setting" role="menuitem" onClick={() => { input.reset = true; setSettingsOpen(false); }} title="Teleport back to the start">
+            <button type="button" className="setting" role="menuitem" onClick={() => { input.reset = true; setRace(0); setSettingsOpen(false); }} title="Teleport back to the start">
               <span>Respawn</span><b>↺</b>
+            </button>
+            <button type="button" className="setting" role="menuitem" onClick={() => { resetOrbit(); setSettingsOpen(false); }} title="Drag with the left mouse button to look around; double-click (or this) puts the camera back">
+              <span>Camera angle</span><b>Reset</b>
             </button>
             <TLink href="/about" title="Classic view" className="setting setting-solid"><span>Classic view</span><b>→</b></TLink>
           </div>
@@ -210,9 +216,16 @@ export default function World() {
           <span>Now playing<br /><b className={hand.className}>{song}</b></span>
         </div>
       )}
-      {started && mapOpen && <IslandMap carRef={carRef} onClose={() => setMapOpen(false)} />}
-      {started && showKeys && <p className="hud-hint hud-keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrows drive · <kbd>Shift</kbd> boost · <kbd>Space</kbd> brake · <kbd>R</kbd> flip back · <kbd>H</kbd> horn · <kbd>M</kbd> map</p>}
-      {started && !showKeys && !zone && !flipped && <p className="hud-hint">Explore the island · drive up to a dot and press Enter · try the ramps · mind the bombs</p>}
+      {started && mapOpen && <IslandMap carRef={carRef} onClose={() => setMapOpen(false)} onGo={(l) => { if (l.name !== "Circuit") setRace(0); }} />}
+      {started && showKeys && <p className="hud-hint hud-keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrows drive · <kbd>Shift</kbd> boost · <kbd>Space</kbd> brake · <kbd>R</kbd> flip back · <kbd>H</kbd> horn · <kbd>M</kbd> map · drag to look around</p>}
+      {started && !showKeys && !zone && !flipped && !race && <p className="hud-hint">Explore the island · drive up to a dot and press Enter · try the ramps · mind the bombs</p>}
+      {started && race > 0 && !flipped && (
+        <div className="race-chip" role="status">
+          <span>Race mode · dodge the bombs, walls and moving traps</span>
+          <button type="button" onClick={() => { input.teleport = gridSpot(); setRace((r) => r + 1); }} title="Back to the grid with a fresh course">Restart</button>
+          <button type="button" onClick={() => setRace(0)} title="Take the walls and obstacles away">Exit</button>
+        </div>
+      )}
       {flipped && (
         <button type="button" className="flip-hint" onClick={() => { input.flip = true; }}>
           Oops, you flipped! Press <kbd>R</kbd> or tap here to flip back
