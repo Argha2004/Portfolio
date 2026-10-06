@@ -8,15 +8,17 @@ import { Instanced, Placed, Dynamic, model, SCALE, rng } from "./kit";
 import { DISTRICTS, ZONES, ISLAND_R, nearRoad } from "./zones";
 import { Pad, SkillCubes, AboutBoard, GroundText, FONT, FONT_REG } from "./Props";
 import { Ramp } from "./Atmosphere";
-import { Trees, Bushes, PoleLights, Lanterns, Benches, BrickWall, ExplosiveCrate } from "./bruno";
+import { ExplosiveCrate } from "./Bombs";
+import { Trees, Bushes, PoleLights, Lanterns, Benches, BrickWall } from "./bruno";
 
 const G = SCALE.graveyard, F = SCALE.forest, A = SCALE.arena, R = SCALE.roads;
 
 // A labelled post sign (used to name each district at its entrance)
-function DistrictSign({ position, rotation = 0, title, subtitle, color = "#5a2d2a" }) {
+export function DistrictSign({ position, rotation = 0, title, subtitle, color = "#5a2d2a" }) {
   return (
     <group position={position} rotation-y={rotation}>
-      <RigidBody type="fixed" colliders={false}><CuboidCollider args={[2.4, 1.6, 0.2]} position={[0, 2.4, 0]} /></RigidBody>
+      {/* down to the ground, so the car bumps it instead of wedging under the board */}
+      <RigidBody type="fixed" colliders={false}><CuboidCollider args={[2.4, 2.0, 0.2]} position={[0, 2.0, 0]} /></RigidBody>
       {[-1.9, 1.9].map((x) => (
         <mesh key={x} position={[x, 1.2, 0]} castShadow><boxGeometry args={[0.22, 2.4, 0.22]} /><meshStandardMaterial color="#6b3b35" /></mesh>
       ))}

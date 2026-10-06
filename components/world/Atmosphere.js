@@ -1,26 +1,67 @@
 "use client";
 import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import { RigidBody, CuboidCollider } from "@react-three/rapier";
+import { RigidBody, ConvexHullCollider } from "@react-three/rapier";
 import * as THREE from "three";
 
-export function Ramp({ position, rotationY = 0, length = 6, width = 3.6, angle = 0.26 }) {
-  const h = Math.sin(angle) * length;
+// ───────── Jump ramp: a solid wedge (no floating slab), stripy deck, matching hull collider ─────────
+// Low end at local +Z flush with the ground, high end at -Z; drive in from +Z.
+function deckTexture() {
+  const c = document.createElement("canvas");
+  c.width = 128; c.height = 256;
+  const g = c.getContext("2d");
+  g.fillStyle = "#3a2c3d"; g.fillRect(0, 0, 128, 256);
+  // three orange chevrons pointing up the ramp, on a dark deck with cream edge bands
+  g.fillStyle = "#ff8a3d";
+  for (let k = 0; k < 3; k++) {
+    const y = 40 + k * 70;
+    g.beginPath(); g.moveTo(14, y + 40); g.lineTo(64, y); g.lineTo(114, y + 40); g.lineTo(114, y + 62); g.lineTo(64, y + 22); g.lineTo(14, y + 62); g.closePath(); g.fill();
+  }
+  g.fillStyle = "#fff1e4"; g.fillRect(0, 0, 10, 256); g.fillRect(118, 0, 10, 256);
+  g.fillStyle = "#e5423a";
+  for (let y = 0; y < 256; y += 32) { g.fillRect(0, y, 10, 16); g.fillRect(118, y, 10, 16); }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  return t;
+}
+let deckTex = null;
+
+export function Ramp({ position, rotationY = 0, length = 7, width = 4.2, angle = 0.3 }) {
+  const { body, deck, hull, h } = useMemo(() => {
+    const h = Math.tan(angle) * length, L = length / 2, W = width / 2;
+    // Wedge body (both triangular sides, the back and the bottom), flat-shaded
+    const v = [
+      [-W, -0.02, L], [-W, h, -L], [-W, -0.02, -L],   // left side (facing -X)
+      [W, -0.02, L], [W, -0.02, -L], [W, h, -L],      // right side (facing +X)
+      [-W, -0.02, -L], [W, h, -L], [W, -0.02, -L], [-W, -0.02, -L], [-W, h, -L], [W, h, -L], // back (facing -Z)
+    ].flat();
+    const body = new THREE.BufferGeometry();
+    body.setAttribute("position", new THREE.Float32BufferAttribute(v, 3));
+    body.computeVertexNormals();
+    // Sloped deck with proper UVs (chevrons run up the slope)
+    const deck = new THREE.PlaneGeometry(width, Math.hypot(length, h));
+    deck.rotateX(-Math.PI / 2 + angle).translate(0, h / 2 + 0.005, 0);
+    const hull = new Float32Array([-W, -0.02, L, W, -0.02, L, -W, -0.02, -L, W, -0.02, -L, -W, h, -L, W, h, -L]);
+    return { body, deck, hull, h };
+  }, [length, width, angle]);
+  deckTex ||= deckTexture();
   return (
     <group position={position} rotation-y={rotationY}>
       <RigidBody type="fixed" colliders={false}>
-        <CuboidCollider args={[width / 2, 0.15, length / 2]} position={[0, h / 2 - 0.1, 0]} rotation={[angle, 0, 0]} friction={0.9} />
+        <ConvexHullCollider args={[hull]} friction={0.9} />
       </RigidBody>
-      <mesh position={[0, h / 2 - 0.1, 0]} rotation-x={angle} castShadow receiveShadow>
-        <boxGeometry args={[width, 0.3, length]} />
-        <meshStandardMaterial color="#fff1e4" roughness={0.8} />
+      <mesh geometry={body} castShadow receiveShadow>
+        <meshLambertMaterial color="#5a3f55" />
       </mesh>
-      {[-1, 1].map((sd) => (
-        <mesh key={sd} position={[sd * (width / 2 + 0.06), h / 2 - 0.05, 0]} rotation-x={angle} castShadow>
-          <boxGeometry args={[0.12, 0.42, length]} />
-          <meshStandardMaterial color="#e5423a" roughness={0.6} />
-        </mesh>
-      ))}
+      <mesh geometry={deck} castShadow receiveShadow>
+        <meshLambertMaterial map={deckTex} />
+      </mesh>
+      {/* steel lip on the take-off edge */}
+      <mesh position={[0, h - 0.04, -length / 2 + 0.06]} castShadow>
+        <boxGeometry args={[width + 0.1, 0.12, 0.16]} />
+        <meshLambertMaterial color="#d8d2cc" />
+      </mesh>
     </group>
   );
 }

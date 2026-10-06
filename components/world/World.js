@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { preload } from "react-dom";
 import gsap from "gsap";
 import { useProgress } from "@react-three/drei";
-import { profile, socials, skills, education, publication, awards } from "@/lib/data";
+import { profile } from "@/lib/data";
 import { TLink } from "../Transition";
 import { input, useKeyboard } from "./input";
 import { ALL_ZONE_IDS, SPAWN_POS } from "./zones";
@@ -12,6 +12,7 @@ import { FETCHED, IMAGES } from "./assets";
 import { gridSpot } from "./trackData";
 import { sfx } from "./sound";
 import { hand } from "./fonts";
+import ZonePanel from "./ZonePanel";
 import { cycle, phaseName, skipPhase } from "./dayCycle";
 import { weather, nextWeatherMode } from "./weather";
 
@@ -113,7 +114,7 @@ export default function World() {
     const onKey = (e) => {
       if (e.target.closest?.("input, textarea, select, [contenteditable]")) return;
       if (e.code === "KeyM" && !e.repeat && !input.locked) { setMapOpen((o) => !o); setSettingsOpen(false); sfx.click(); }
-      if (e.code === "Escape") { setMapOpen(false); setSettingsOpen(false); }
+      if (e.code === "Escape") { setMapOpen(false); setSettingsOpen(false); setZone(null); }
     };
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
@@ -220,7 +221,7 @@ export default function World() {
         </div>
       )}
       {started && showKeys && <p className="hud-hint hud-keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrows drive · <kbd>Shift</kbd> boost · <kbd>Space</kbd> brake · <kbd>R</kbd> flip back · <kbd>H</kbd> horn · <kbd>M</kbd> map</p>}
-      {started && !showKeys && !zone && !flipped && <p className="hud-hint">Explore the island · drive up to a dot and press Enter · try the ramps</p>}
+      {started && !showKeys && !zone && !flipped && <p className="hud-hint">Explore the island · drive up to a dot and press Enter · try the ramps · mind the bombs</p>}
       {flipped && (
         <button type="button" className="flip-hint" onClick={() => { input.flip = true; }}>
           Oops, you flipped! Press <kbd>R</kbd> or tap here to flip back
@@ -228,7 +229,8 @@ export default function World() {
       )}
 
       {/* Info panel for the pad the car is parked on */}
-      <aside className={`panel${zone ? " open" : ""}`} aria-live="polite">
+      {/* data-lenis-prevent: the site-wide smooth scroll (Lenis) would otherwise swallow the wheel here */}
+      <aside className={`panel${zone ? " open" : ""}`} aria-live="polite" data-lenis-prevent>
         {lastZone.current && <ZonePanel zone={lastZone.current} />}
       </aside>
 
@@ -262,68 +264,6 @@ export default function World() {
         </div>
       )}
     </main>
-  );
-}
-
-function ZonePanel({ zone }) {
-  if (zone === "skills") {
-    return (
-      <>
-        <span className="panel-kicker">Skills</span>
-        <h2>What I work with</h2>
-        <dl className="panel-list">{skills.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
-      </>
-    );
-  }
-  if (zone === "research") {
-    return (
-      <>
-        <span className="panel-kicker">Research</span>
-        <h2>{publication.title}</h2>
-        <p className="panel-sub">{publication.venue} — {publication.date}</p>
-        <p>{publication.authors}</p>
-        <ul className="panel-plain">{awards.map((a) => <li key={a.title}><b>{a.title}</b> ({a.year}): {a.detail}</li>)}</ul>
-        <div className="panel-actions"><a className="btn btn-solid" href={publication.href} target="_blank" rel="noreferrer">Read on IEEE Xplore ↗</a></div>
-      </>
-    );
-  }
-  if (zone === "about") {
-    return (
-      <>
-        <span className="panel-kicker">About me</span>
-        <h2>Hi, I&apos;m Arghadeep.</h2>
-        <p>{profile.summary}</p>
-        <ul className="panel-plain">{education.map((e) => <li key={e.school}><b>{e.school}</b>: {e.degree}, {e.period} ({e.score})</li>)}</ul>
-        <div className="panel-actions"><TLink href="/about" title="About" className="btn btn-solid">Full profile</TLink></div>
-      </>
-    );
-  }
-  if (zone === "graveyard") {
-    return (
-      <>
-        <span className="panel-kicker">Secret found: Design Graveyard</span>
-        <h2>Here lie my old portfolios.</h2>
-        <p>Before this island, the site went through seven complete redesigns. Each one has a gravestone here. Feel free to knock them over.</p>
-        <ul className="panel-plain">
-          <li><b>v1</b>: WebGL fluid simulation</li>
-          <li><b>v2</b>: Editorial with a 3D glass blob</li>
-          <li><b>v3</b>: Dark tech with morphing particles</li>
-          <li><b>v4</b>: Interactive research paper</li>
-          <li><b>v5</b>: Liquid-chrome blob &amp; fluid trails</li>
-          <li><b>v6</b>: Molten-red liquid (Lama Lama-inspired)</li>
-          <li><b>v7</b>: Curved screens in a 3D room</li>
-        </ul>
-      </>
-    );
-  }
-  return (
-    <>
-      <span className="panel-kicker">Contact</span>
-      <h2>Let&apos;s talk.</h2>
-      <p>Open to internships and research collaborations in Edge AI, medical imaging and LLM systems.</p>
-      <a className="panel-mail" href={`mailto:${profile.email}`}>{profile.email}</a>
-      <div className="panel-actions">{socials.map((s) => <a key={s.label} className="btn" href={s.href} target="_blank" rel="noreferrer">{s.label} ↗</a>)}</div>
-    </>
   );
 }
 

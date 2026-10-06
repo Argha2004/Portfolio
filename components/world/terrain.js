@@ -5,7 +5,7 @@ import { useTexture } from "@react-three/drei";
 import { RigidBody, HeightfieldCollider, CuboidCollider } from "@react-three/rapier";
 import * as THREE from "three";
 import { weather } from "./weather";
-import { ISLAND_R, PONDS, pondEdge, nearRoad, DISTRICTS, connectors } from "./zones";
+import { ISLAND_R, PONDS, pondEdge, nearRoad, DISTRICTS, SECTIONS, connectors } from "./zones";
 import { trailSamples, TRAIL_WIDTH, nearestTrailIndex } from "./trailData";
 
 // ───────── Terrain & water, after Bruno Simon's folio-2025 (MIT) ─────────
@@ -46,6 +46,7 @@ const PLAZAS = [
   { x: DISTRICTS.village.center[0], z: DISTRICTS.village.center[1], r: 11 },
   { x: DISTRICTS.camp.center[0], z: DISTRICTS.camp.center[1], r: 7 },
   { x: DISTRICTS.graveyard.center[0], z: DISTRICTS.graveyard.center[1] - 16, r: 6 },
+  ...Object.values(SECTIONS).map((sec) => ({ x: sec.center[0], z: sec.center[1], r: sec.r - 3 })),
 ];
 
 function blur(src, radius) {

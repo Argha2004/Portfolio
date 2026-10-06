@@ -1,8 +1,8 @@
 "use client";
-import { useMemo, useRef, useLayoutEffect, useState } from "react";
+import { useMemo, useRef, useLayoutEffect } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
-import { RigidBody, CuboidCollider, CylinderCollider, useRapier } from "@react-three/rapier";
+import { RigidBody, CuboidCollider, CylinderCollider } from "@react-three/rapier";
 import * as THREE from "three";
 import { InstancedParts, BoxColliders, rng } from "./kit";
 import { CAM_OFFSET } from "./zones";
@@ -137,7 +137,7 @@ const poleGlass = new THREE.MeshBasicMaterial({ map: radialTexture("#ff8641", "#
 function NightGlass() {
   useFrame(() => {
     const n = cycle.nightAmount;
-    poleGlass.color.setScalar(0.18 + n * 1.6); // dim glass by day, bright at night
+    poleGlass.color.setScalar(0.18 + n * 2.8); // dim glass by day, blazing at night
   });
   return null;
 }
@@ -178,6 +178,42 @@ function Fireflies({ centers }) {
   return <points ref={ref} geometry={geometry} material={material} frustumCulled={false} />;
 }
 
+// ── Night light pools: a warm glow spread on the ground under every lamp, fading in at night.
+// (Dozens of real lights would be far too expensive, so the spread of light is painted on.) ──
+let poolTex = null;
+function poolTexture() {
+  const c = document.createElement("canvas");
+  c.width = c.height = 128;
+  const g = c.getContext("2d"), grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grad.addColorStop(0, "rgba(255,255,255,1)"); grad.addColorStop(0.3, "rgba(255,255,255,0.55)");
+  grad.addColorStop(0.65, "rgba(255,255,255,0.16)"); grad.addColorStop(1, "rgba(255,255,255,0)");
+  g.fillStyle = grad; g.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(c);
+}
+export function LightPools({ points, radius = 7, color = "#ff9a4a", strength = 1 }) {
+  const mesh = useRef();
+  const material = useMemo(() => new THREE.MeshBasicMaterial({
+    map: (poolTex ||= poolTexture()), color, transparent: true, opacity: 0, blending: THREE.AdditiveBlending,
+    depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -4,
+  }), [color]);
+  useLayoutEffect(() => {
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0));
+    points.forEach(([x, , z], i) => mesh.current.setMatrixAt(i, m.compose(new THREE.Vector3(x, 0.14, z), q, new THREE.Vector3(radius * 2, radius * 2, 1))));
+    mesh.current.instanceMatrix.needsUpdate = true;
+    mesh.current.computeBoundingSphere();
+  }, [points, radius]);
+  useFrame(() => {
+    const n = cycle.nightAmount;
+    material.opacity = n * 0.9 * strength;
+    if (mesh.current) mesh.current.visible = n > 0.02;
+  });
+  return (
+    <instancedMesh ref={mesh} args={[undefined, undefined, Math.max(points.length, 1)]} material={material} renderOrder={1}>
+      <planeGeometry args={[1, 1]} />
+    </instancedMesh>
+  );
+}
+
 export function PoleLights({ items, lights = 0, scale = 1.25 }) {
   // the model is centred on its own height; lift it so its base sits on the ground
   const { parts, box } = usePiece(B("poleLights"), isPole);
@@ -192,17 +228,34 @@ export function PoleLights({ items, lights = 0, scale = 1.25 }) {
       <BoxColliders box={box} items={placed} shape="trunk" />
       <NightGlass />
       <Fireflies centers={tops} />
+      <LightPools points={tops} radius={7.5} />
       {items.slice(0, lights).map((it, i) => (
-        <pointLight key={i} position={[it.p[0], (box.max.y - 0.3) * scale + lift, it.p[2]]} color="#ff9a5c" intensity={12} distance={11} decay={1.6} />
+        <NightLamp key={i} position={[it.p[0], (box.max.y - 0.3) * scale + lift, it.p[2]]} />
       ))}
     </>
   );
 }
 
+// A real light for a lamp, faint by day and strong and wide at night
+function NightLamp({ position }) {
+  const ref = useRef();
+  useFrame(() => {
+    const n = cycle.nightAmount;
+    if (ref.current) { ref.current.intensity = 2 + n * 34; ref.current.distance = 11 + n * 9; }
+  });
+  return <pointLight ref={ref} position={position} color="#ff9a5c" intensity={2} distance={11} decay={1.5} />;
+}
+
 export function Lanterns({ items }) {
   const { box } = usePiece(B("lanterns"), isLantern);
   const lift = -box.min.y;
-  return <Piece url={B("lanterns")} test={isLantern} items={items.map((it) => ({ ...it, p: [it.p[0], (it.p[1] || 0) + lift, it.p[2]] }))} />;
+  const spots = useMemo(() => items.map((it) => [it.p[0], 0, it.p[2]]), [items]);
+  return (
+    <>
+      <Piece url={B("lanterns")} test={isLantern} items={items.map((it) => ({ ...it, p: [it.p[0], (it.p[1] || 0) + lift, it.p[2]] }))} />
+      <LightPools points={spots} radius={4.2} color="#ffb060" strength={0.85} />
+    </>
+  );
 }
 
 export const isBench = (o) => o.name.startsWith("benchPhysical");
@@ -235,56 +288,6 @@ export function Fences({ from, to }) {
     const t = (i + 0.5) / n;
     return <DynamicPiece key={i} url={B("fences")} test={isFence} position={[from[0] + (to[0] - from[0]) * t, -box.min.y + 0.02, from[1] + (to[1] - from[1]) * t]} rotation={yaw} density={0.25} sound="wood" />;
   });
-}
-
-// ── Explosive crates: hit one hard and it blows up, throwing everything nearby ──
-const isCrate = () => true;
-export function ExplosiveCrate({ position }) {
-  const { obj, box } = usePiece(B("explosiveCrates"), isCrate);
-  const clone = useMemo(() => obj.clone(true), [obj]);
-  const body = useRef();
-  const flash = useRef();
-  const [gone, setGone] = useState(false);
-  const { world } = useRapier();
-  const half = box.getSize(new THREE.Vector3()).multiplyScalar(0.5);
-
-  const explode = () => {
-    if (gone) return;
-    const p = body.current.translation();
-    sfx.explosion();
-    // Push every dynamic body within 7 m away from the blast, up and out
-    world.bodies.forEach((b) => {
-      if (!b.isDynamic() || b === body.current) return;
-      const t = b.translation(), dx = t.x - p.x, dy = t.y - p.y, dz = t.z - p.z, d = Math.hypot(dx, dy, dz);
-      if (d > 7 || d < 1e-3) return;
-      const k = (1 - d / 7) * b.mass() * 9;
-      b.applyImpulse({ x: (dx / d) * k, y: k * 0.9 + b.mass() * 2, z: (dz / d) * k }, true);
-      b.applyTorqueImpulse({ x: (Math.random() - 0.5) * k * 0.3, y: 0, z: (Math.random() - 0.5) * k * 0.3 }, true);
-    });
-    if (flash.current) { flash.current.position.set(p.x, p.y + 1, p.z); flash.current.intensity = 400; }
-    setGone(true);
-  };
-
-  useLayoutEffect(() => {
-    if (!gone || !flash.current) return;
-    let raf, light = flash.current;
-    const fade = () => { light.intensity *= 0.86; if (light.intensity > 0.5) raf = requestAnimationFrame(fade); else light.intensity = 0; };
-    fade();
-    return () => cancelAnimationFrame(raf);
-  }, [gone]);
-
-  return (
-    <>
-      <pointLight ref={flash} color="#ff7a2e" intensity={0} distance={18} decay={1.5} />
-      {!gone && (
-        <RigidBody ref={body} position={position} colliders={false} linearDamping={0.3} angularDamping={0.4}
-          onContactForce={(e) => { if (e.other.rigidBodyObject?.name === "car" && e.totalForceMagnitude > 2500) explode(); }}>
-          <CuboidCollider args={half.toArray()} density={0.3} friction={0.8} />
-          <primitive object={clone} />
-        </RigidBody>
-      )}
-    </>
-  );
 }
 
 // ───────── Trees with Bruno's foliage ─────────

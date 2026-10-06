@@ -74,8 +74,27 @@ export function nearRoad(x, z, margin = 6) {
   return onAvenue || Math.hypot(x, z) < 18 || nearTrack(x, z) || inPond(x, z, margin * 0.5 + 2) || inArea(x, z) || nearTrail(x, z);
 }
 
-// Footprints of the two Bruno areas (projects forge, social plinth), kept clear of scenery
-const AREA_CIRCLES = [{ x: -13.5, z: -46.5, r: 10 }, { x: 56, z: 24, r: 12 }, { x: 70, z: 11, r: 3 }];
+// Sections out between the circuit and the adventure trail (see Sections.js). The camera always
+// looks from the same side, so each section faces it: `yaw` turns the section's local +Z towards
+// the camera, putting the pad at the front and everything readable behind it.
+const section = (x, z, r) => ({ center: [x, z], r, yaw: Math.atan2(CAM_OFFSET[0], CAM_OFFSET[2]) });
+export const SECTIONS = {
+  campus: section(154, 50, 14),    // education
+  fame: section(-34, -160, 14),    // awards & certifications
+  lab: section(-151, 32, 12),      // research interests
+};
+// a point given in a section's local frame (x across, z towards the island centre) → world [x, z]
+const ground = ([x, z]) => [x, 0, z];
+export const sectionPoint = (sec, lx, lz) => {
+  const c = Math.cos(sec.yaw), s = Math.sin(sec.yaw);
+  return [sec.center[0] + lx * c + lz * s, sec.center[1] - lx * s + lz * c];
+};
+
+// Footprints of the two Bruno areas (projects forge, social plinth) and the sections, kept clear of scenery
+const AREA_CIRCLES = [
+  { x: -13.5, z: -46.5, r: 10 }, { x: 56, z: 24, r: 12 }, { x: 70, z: 11, r: 3 },
+  ...Object.values(SECTIONS).map((s) => ({ x: s.center[0], z: s.center[1], r: s.r + 2 })),
+];
 export const inArea = (x, z) => AREA_CIRCLES.some((c) => Math.hypot(x - c.x, z - c.z) < c.r);
 
 // ───────── Districts ─────────
@@ -98,6 +117,9 @@ export const ZONES = {
   graveyard: { id: "graveyard", pos: [-48, 0, 36], label: "R.I.P.", color: "#9b8cff" },
   about: { id: "about", pos: [38, 0, 40], label: "ABOUT ME", color: "#a98bd6" },
   contact: { id: "contact", pos: [SOCIAL_CENTER[0], 0, SOCIAL_CENTER[1]], label: "CONTACT", color: "#5d8ff0" },
+  education: { id: "education", pos: ground(sectionPoint(SECTIONS.campus, 0, 7)), label: "EDUCATION", color: "#6ec6ff" },
+  achievements: { id: "achievements", pos: ground(sectionPoint(SECTIONS.fame, 0, 7)), label: "HALL OF FAME", color: "#ffc93c" },
+  interests: { id: "interests", pos: ground(sectionPoint(SECTIONS.lab, 0, 6)), label: "EDGE AI LAB", color: "#3ddc97" },
 };
 
 // Everything the visitor can discover (for the "Discovered n / N" counter)

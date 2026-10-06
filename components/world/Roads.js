@@ -1,7 +1,9 @@
 "use client";
 import { useMemo } from "react";
 import { CELL, roadCells, roundaboutExits, connectorCells, connectors, avenueEnds } from "./zones";
+import * as THREE from "three";
 import { asphaltTexture } from "./Circuit";
+import { TRACK_WIDTH, RUNOFF } from "./trackData";
 import { Instanced, Placed, model, SCALE } from "./kit";
 import { PoleLights } from "./bruno";
 
@@ -74,22 +76,90 @@ export default function Roads() {
   );
 }
 
-// Track-style asphalt strips joining each avenue to the circuit. Drawn just above the run-off
-// sand but below the circuit surface, kerbs and edge lines, so the track paints over the join.
-function Connectors() {
-  const tex = useMemo(() => {
-    const t = asphaltTexture();
-    t.repeat.set(1, 3);
-    return t;
-  }, []);
-  return connectors.map(({ dir, from, to }) => {
-    const len = Math.hypot(to[0] - from[0], to[1] - from[1]) + 1;
-    const vertical = dir === "N" || dir === "S";
-    return (
-      <mesh key={dir} position={[(from[0] + to[0]) / 2, 0.025, (from[1] + to[1]) / 2]} rotation={[-Math.PI / 2, 0, vertical ? 0 : Math.PI / 2]} receiveShadow>
-        <planeGeometry args={[5.6, len]} />
-        <meshStandardMaterial map={tex} roughness={0.92} />
+// ───────── Junctions: each avenue continues as a proper road into the circuit ─────────
+// From the last road tile to the track: asphalt with edge lines and a dashed centre line,
+// sidewalks until the run-off sand, then a flared mouth with red/white kerbs and give-way
+// "shark teeth" where it meets the track. Built flat in a local frame (x across, -z along).
+const ROAD_W = 5.6, MOUTH_W = 12, FLARE = 7, HW = TRACK_WIDTH / 2;
+const RED = new THREE.Color("#d8231c"), WHITE = new THREE.Color("#f6f1ea");
+
+function flatGeometry(tris, uvScale) {
+  // tris: [[x, z], …] three at a time; faces are turned to point up; optional per-triangle colours
+  const pos = [], uv = [], col = [];
+  for (const t of tris) {
+    let [a, b, c] = t.pts;
+    if ((b[1] - a[1]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[1] - a[1]) < 0) [b, c] = [c, b];
+    for (const [x, z] of [a, b, c]) {
+      pos.push(x, 0, z);
+      if (uvScale) uv.push(x / uvScale, -z / uvScale);
+      if (t.color) col.push(t.color.r, t.color.g, t.color.b);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  if (uv.length) g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  if (col.length) g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+  g.computeVertexNormals();
+  return g;
+}
+const quad = (a, b, c, d, color) => [{ pts: [a, b, c], color }, { pts: [a, c, d], color }];
+// a strip of width `w` centred on the polyline `line` ([[x, s], …] with s along the road → z = -s)
+function strip(line, w, colorAt) {
+  const out = [];
+  for (let i = 0; i < line.length - 1; i++) {
+    const [x0, s0] = line[i], [x1, s1] = line[i + 1];
+    const dx = x1 - x0, ds = s1 - s0, len = Math.hypot(dx, ds), nx = (ds / len) * w / 2, ns = (-dx / len) * w / 2;
+    out.push(...quad([x0 - nx, -(s0 - ns)], [x1 - nx, -(s1 - ns)], [x1 + nx, -(s1 + ns)], [x0 + nx, -(s0 + ns)], colorAt?.(i)));
+  }
+  return out;
+}
+// split a polyline into short pieces (for striped kerbs and dashes)
+function pieces(a, b, step) {
+  const n = Math.max(1, Math.round(Math.hypot(b[0] - a[0], b[1] - a[1]) / step)), out = [];
+  for (let i = 0; i <= n; i++) out.push([a[0] + (b[0] - a[0]) * (i / n), a[1] + (b[1] - a[1]) * (i / n)]);
+  return out;
+}
+
+function Junction({ from, to }) {
+  const L = Math.hypot(to[0] - from[0], to[1] - from[1]);
+  const u = [(to[0] - from[0]) / L, (to[1] - from[1]) / L];
+  const yaw = Math.atan2(-u[0], -u[1]);
+  const geo = useMemo(() => {
+    const E = L - HW, F = E - FLARE, R0 = L - HW - RUNOFF - 0.5, r = ROAD_W / 2, m = MOUTH_W / 2;
+    const asphalt = flatGeometry([
+      ...quad([-r, 0], [r, 0], [r, -F], [-r, -F]),
+      ...quad([-r, -F], [r, -F], [m, -E], [-m, -E]),
+      ...quad([-m, -E], [m, -E], [m, -(E + 2)], [-m, -(E + 2)]),
+    ], 6);
+    const edge = (sg) => [[sg * (r - 0.3), 0], [sg * (r - 0.3), F], [sg * (m - 0.3), E]];
+    const lines = [...strip(edge(-1), 0.18), ...strip(edge(1), 0.18)];
+    for (let s = 1.5; s < F - 1.5; s += 3.2) lines.push(...strip([[0, s], [0, s + 1.6]], 0.16));
+    // give-way shark teeth across the mouth, pointing at oncoming cars
+    for (let x = -m + 0.9; x <= m - 0.9; x += 1.1) lines.push({ pts: [[x - 0.4, -(E - 0.5)], [x + 0.4, -(E - 0.5)], [x, -(E - 1.5)]] });
+    const kerbLine = (sg) => pieces([sg * r, F], [sg * m, E], 1.2).map(([x, s]) => [x + sg * 0.45, s]);
+    const kerbs = [...strip(kerbLine(-1), 0.9, (i) => (i % 2 ? RED : WHITE)), ...strip(kerbLine(1), 0.9, (i) => (i % 2 ? RED : WHITE))];
+    // sidewalks continue the road tile's pavements up to the run-off sand
+    const walks = R0 > 1 ? [[-1, R0], [1, R0]].map(([sg, len]) => ({ x: sg * (r + 0.6), len })) : [];
+    return { asphalt: asphalt, lines: flatGeometry(lines), kerbs: flatGeometry(kerbs), walks };
+  }, [L]);
+  const tex = useMemo(() => { const t = asphaltTexture(); t.repeat.set(1, 1); return t; }, []);
+  return (
+    <group position={[from[0], 0, from[1]]} rotation-y={yaw}>
+      <mesh geometry={geo.asphalt} position-y={0.026} receiveShadow>
+        <meshStandardMaterial map={tex} roughness={0.92} polygonOffset polygonOffsetFactor={-1} />
       </mesh>
-    );
-  });
+      <mesh geometry={geo.lines} position-y={0.036}><meshStandardMaterial color="#f7f2ea" roughness={0.6} /></mesh>
+      <mesh geometry={geo.kerbs} position-y={0.05} receiveShadow><meshStandardMaterial vertexColors roughness={0.55} /></mesh>
+      {geo.walks.map((w) => (
+        <mesh key={w.x} position={[w.x, 0.06, -w.len / 2]} receiveShadow castShadow>
+          <boxGeometry args={[1.2, 0.12, w.len]} />
+          <meshStandardMaterial color="#d9d2cb" roughness={0.9} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function Connectors() {
+  return connectors.map(({ dir, from, to }) => <Junction key={dir} from={from} to={to} />);
 }

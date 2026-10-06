@@ -19,6 +19,8 @@ import Roads from "./Roads";
 import Circuit from "./Circuit";
 import Trail from "./Trail";
 import { SkillsCamp, ResearchArena, DesignGraveyard, Village, Outskirts, SpawnGarden } from "./Districts";
+import { Campus, HallOfFame, EdgeLab } from "./Sections";
+import { Bombs, Fireballs } from "./Bombs";
 import { Reveal } from "./Reveal";
 import { sfx } from "./sound";
 import { view } from "./view";
@@ -113,8 +115,20 @@ function Sun({ carRef }) {
 }
 
 export default function Scene({ carRef, lapRef, trailRef, revealRef, zone, setZone, onDiscover, onFlipped, onReady, quality = "high" }) {
-  const enter = (id) => { setZone(id); sfx.chime(); };
-  const exit = (id) => setZone((z) => (z === id ? null : z));
+  // Leaving a pad closes its panel after a short grace period, so bumping around on the pad's
+  // edge doesn't flicker it; re-entering cancels the close (and doesn't replay the chime)
+  const leaving = useRef({});
+  const current = useRef(zone);
+  current.current = zone;
+  const enter = (id) => {
+    if (leaving.current[id]) { clearTimeout(leaving.current[id]); leaving.current[id] = 0; }
+    if (current.current !== id) sfx.chime();
+    setZone(id);
+  };
+  const exit = (id) => {
+    clearTimeout(leaving.current[id]);
+    leaving.current[id] = setTimeout(() => { leaving.current[id] = 0; setZone((z) => (z === id ? null : z)); }, 700);
+  };
   const high = quality === "high";
   const zp = { zone, onEnter: enter, onExit: exit };
 
@@ -154,11 +168,18 @@ export default function Scene({ carRef, lapRef, trailRef, revealRef, zone, setZo
           <DesignGraveyard {...zp} />
           <Village {...zp} />
           <Outskirts />
+          {/* New sections out by the trail: education, awards & certifications, interests */}
+          <Campus {...zp} />
+          <HallOfFame {...zp} />
+          <EdgeLab {...zp} />
+          {/* Bruno's explosive crates, scattered all over the island */}
+          <Bombs />
 
           <Car carRef={carRef} onFlipped={onFlipped} />
           <Ready revealRef={revealRef} onReady={onReady} />
         </Physics>
         <Particles carRef={carRef} />
+        <Fireballs carRef={carRef} />
         <Precipitation carRef={carRef} />
       </Suspense>
 

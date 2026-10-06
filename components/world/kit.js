@@ -48,7 +48,7 @@ export function InstancedParts({ parts, items, castShadow = true, receiveShadow 
   }, [parts, items]);
   if (!items.length) return null;
   return parts.map((part, pi) => (
-    <instancedMesh key={pi} ref={(el) => (refs.current[pi] = el)} args={[part.geometry, part.material, items.length]} castShadow={castShadow} receiveShadow={receiveShadow} />
+    <instancedMesh key={pi} ref={(el) => { refs.current[pi] = el; }} args={[part.geometry, part.material, items.length]} castShadow={castShadow} receiveShadow={receiveShadow} />
   ));
 }
 

@@ -198,7 +198,7 @@ function StartFinish() {
         {[0, 1, 2, 3, 4].map((i) => (
           <mesh key={i} position={[2.2 + i * 1.05, 7.4, 0.47]}>
             <circleGeometry args={[0.36, 20]} />
-            <meshStandardMaterial ref={(m) => (lights.current[i] = m)} color="#4a0a0a" emissive="#ff1a1a" emissiveIntensity={0.15} toneMapped={false} />
+            <meshStandardMaterial ref={(m) => { lights.current[i] = m; }} color="#4a0a0a" emissive="#ff1a1a" emissiveIntensity={0.15} toneMapped={false} />
           </mesh>
         ))}
       </group>

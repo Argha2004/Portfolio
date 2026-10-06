@@ -77,6 +77,31 @@ const patch = /* glsl */ `
   vec3 bShade = bBase * bShadowCol;
   outgoingLight = mix( bLit, bShade, clamp( max( bCore, bCast ), 0.0, 1.0 ) ) + totalEmissiveRadiance;
 
+  // Local lights (bomb flashes, the campfire, lamp posts, the car's headlight) are added on top,
+  // softly wrapped so the ground under a light catches it. (His model has no local lights, so
+  // without this they lit nothing at night.)
+  vec3 bLocal = vec3( 0.0 );
+  vec3 bPos = - vViewPosition;
+  #if NUM_POINT_LIGHTS > 0
+  for ( int i = 0; i < NUM_POINT_LIGHTS; i ++ ) {
+    vec3 bL = pointLights[ i ].position - bPos;
+    float bD = length( bL );
+    float bAtt = getDistanceAttenuation( bD, pointLights[ i ].distance, pointLights[ i ].decay );
+    bLocal += pointLights[ i ].color * bAtt * ( dot( normal, bL / max( bD, 1e-4 ) ) * 0.5 + 0.5 );
+  }
+  #endif
+  #if NUM_SPOT_LIGHTS > 0
+  for ( int i = 0; i < NUM_SPOT_LIGHTS; i ++ ) {
+    vec3 bL = spotLights[ i ].position - bPos;
+    float bD = length( bL );
+    vec3 bDir = bL / max( bD, 1e-4 );
+    float bCone = smoothstep( spotLights[ i ].coneCos, spotLights[ i ].penumbraCos, dot( bDir, spotLights[ i ].direction ) );
+    float bAtt = getDistanceAttenuation( bD, spotLights[ i ].distance, spotLights[ i ].decay );
+    bLocal += spotLights[ i ].color * bAtt * bCone * ( max( dot( normal, bDir ), 0.0 ) * 0.7 + 0.3 );
+  }
+  #endif
+  outgoingLight += bBase * bLocal * 0.45;
+
   // White water line where the surface crosses the water plane
   float bDy = abs( bWorld.y - ( ${LOOK.waterY.toFixed(3)} ) );
   float bW = max( fwidth( bWorld.y ), 0.004 );

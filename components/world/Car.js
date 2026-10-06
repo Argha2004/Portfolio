@@ -9,6 +9,7 @@ import { sfx } from "./sound";
 import { SPAWN_POS } from "./zones";
 import { B, brunoify } from "./bruno";
 import { terrain } from "./terrain";
+import { cycle } from "./dayCycle";
 
 export const SPAWN = SPAWN_POS;
 
@@ -191,7 +192,7 @@ export default function Car({ carRef, onFlipped }) {
       <CuboidCollider args={[0.6, 0.22, 0.6]} position={[0, 1.0, 0.15]} density={0.3} friction={0.4} />
       <CarModel partsRef={partsRef} />
       {WHEELS.map((w, i) => (
-        <group key={i} ref={(el) => (wheelRefs.current[i] = el)} position={[w.x, HARDPOINT_Y - SUSP_REST, w.z]}>
+        <group key={i} ref={(el) => { wheelRefs.current[i] = el; }} position={[w.x, HARDPOINT_Y - SUSP_REST, w.z]}>
           <Wheel left={w.x < 0} spinRef={(el) => (spinRefs.current[i] = el)} strutRef={(el) => (strutRefs.current[i] = el)} />
         </group>
       ))}
@@ -259,6 +260,11 @@ function Headlight() {
   const light = useRef();
   const target = useRef();
   useEffect(() => { light.current.target = target.current; }, []);
+  // a longer, brighter beam at night
+  useFrame(() => {
+    const n = cycle.nightAmount, l = light.current;
+    if (l) { l.intensity = 18 + n * 60; l.distance = 16 + n * 16; }
+  });
   return (
     <>
       <spotLight ref={light} position={[0, 0.7, -1.6]} angle={0.55} penumbra={0.7} distance={16} intensity={18} color="#fff1d6" />

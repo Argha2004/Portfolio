@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import { RigidBody, CuboidCollider, CylinderCollider } from "@react-three/rapier";
+import { RigidBody, CuboidCollider } from "@react-three/rapier";
 import { Text, Text3D, Center } from "@react-three/drei";
 
 export const FONT = "/fonts/inter-800.woff";
@@ -42,6 +42,9 @@ export function Pad({ id, position, color, label, active, onEnter, onExit }) {
     ring.current.scale.set(s, s, s);
   });
   const isCar = (e) => e.other.rigidBodyObject?.name === "car";
+  // The car has several colliders and each reports its own enter / exit: count them, so the
+  // panel only closes once the whole car has left (not when one part pokes out of the sensor)
+  const inside = useRef(0);
   return (
     <group position={position}>
       <mesh rotation-x={-Math.PI / 2} position-y={0.02} receiveShadow>
@@ -54,8 +57,8 @@ export function Pad({ id, position, color, label, active, onEnter, onExit }) {
       </mesh>
       <RigidBody type="fixed" colliders={false}>
         <CuboidCollider sensor args={[2, 1.2, 2]} position={[0, 1.2, 0]}
-          onIntersectionEnter={(e) => isCar(e) && onEnter(id)}
-          onIntersectionExit={(e) => isCar(e) && onExit(id)} />
+          onIntersectionEnter={(e) => { if (isCar(e) && inside.current++ === 0) onEnter(id); }}
+          onIntersectionExit={(e) => { if (isCar(e) && --inside.current <= 0) { inside.current = 0; onExit(id); } }} />
       </RigidBody>
       {label && <GroundText position={[0, 0, 3.4]} size={0.7}>{label}</GroundText>}
     </group>
@@ -98,10 +101,10 @@ export function SkillCubes({ tags, position }) {
 export function AboutBoard({ position, lines }) {
   const [x, , z] = position;
   return (
-    <group position={[x, 0, z - 4.5]}>
+    <group position={[x, 0, z - 5.5]}>
       <RigidBody type="fixed" colliders={false}>
-        <CuboidCollider args={[2.2, 1.4, 0.2]} position={[0, 2.4, 0]} />
-        <CylinderCollider args={[0.6, 0.15]} position={[0, 0.6, 0]} />
+        {/* one solid block down to the ground: a board edge at roof height used to catch the car and flip it */}
+        <CuboidCollider args={[2.2, 1.9, 0.2]} position={[0, 1.9, 0]} />
       </RigidBody>
       <mesh position={[0, 0.6, 0]} castShadow><cylinderGeometry args={[0.13, 0.16, 1.2, 10]} /><meshStandardMaterial color="#6b3b35" /></mesh>
       <mesh position={[0, 2.4, 0]} castShadow><boxGeometry args={[4.4, 2.8, 0.3]} /><meshStandardMaterial color="#a98bd6" roughness={0.6} /></mesh>

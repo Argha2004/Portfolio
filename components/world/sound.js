@@ -44,14 +44,24 @@ class Sfx {
     const d = this.noise.getChannelData(0);
     for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
 
-    // Engine
+    // Engine: a soft, low electric-toy hum instead of a buzzing combustion engine. Rounded waves
+    // (triangle + sine sub, a quiet sine overtone) through a gentle low-pass, with a slow "chug"
+    // tremolo; almost silent while idle so it never drones when the car is parked.
     this.engGain = ctx.createGain(); this.engGain.gain.value = 0;
-    this.engFilter = ctx.createBiquadFilter(); this.engFilter.type = "lowpass"; this.engFilter.frequency.value = 400; this.engFilter.Q.value = 3;
-    this.osc1 = ctx.createOscillator(); this.osc1.type = "sawtooth";
-    this.osc2 = ctx.createOscillator(); this.osc2.type = "square";
-    this.osc1.connect(this.engFilter); this.osc2.connect(this.engFilter);
-    this.engFilter.connect(this.engGain).connect(this.master);
-    this.osc1.start(); this.osc2.start();
+    this.engFilter = ctx.createBiquadFilter(); this.engFilter.type = "lowpass"; this.engFilter.frequency.value = 300; this.engFilter.Q.value = 0.6;
+    this.osc1 = ctx.createOscillator(); this.osc1.type = "triangle";
+    this.osc2 = ctx.createOscillator(); this.osc2.type = "sine";      // sub, an octave down
+    this.osc3 = ctx.createOscillator(); this.osc3.type = "sine";      // soft overtone
+    const o3 = ctx.createGain(); o3.gain.value = 0.18;
+    this.osc1.connect(this.engFilter); this.osc2.connect(this.engFilter); this.osc3.connect(o3).connect(this.engFilter);
+    this.chug = ctx.createGain(); this.chug.gain.value = 1;
+    this.engFilter.connect(this.chug).connect(this.engGain).connect(this.master);
+    this.lfo = ctx.createOscillator(); this.lfo.type = "sine"; this.lfo.frequency.value = 9;
+    this.lfoDepth = ctx.createGain(); this.lfoDepth.gain.value = 0.18;
+    this.lfo.connect(this.lfoDepth).connect(this.chug.gain);
+    [this.osc1, this.osc2, this.osc3, this.lfo].forEach((o) => o.start());
+    // Tyre / road rumble that grows with speed (soft low noise, gives a sense of motion)
+    this.roadGain = this.loopNoise({ type: "lowpass", freq: 160, q: 0.5 });
 
     // Skid
     this.skidGain = this.loopNoise({ type: "bandpass", freq: 1800, q: 2.5 });
@@ -131,11 +141,16 @@ class Sfx {
   update({ speed, throttle, boost, slip, water = 0 }) {
     if (!this.ctx) return;
     const t = this.ctx.currentTime, s = Math.min(Math.abs(speed) / 24, 1.2);
-    const base = 48 + s * 120 + (boost ? 25 : 0) + Math.abs(throttle) * 12;
-    this.osc1.frequency.setTargetAtTime(base, t, 0.06);
-    this.osc2.frequency.setTargetAtTime(base * 0.5 + 1.5, t, 0.06);
-    this.engFilter.frequency.setTargetAtTime(260 + s * 1300 + Math.abs(throttle) * 500, t, 0.08);
-    this.engGain.gain.setTargetAtTime(0.06 + s * 0.08 + Math.abs(throttle) * 0.05, t, 0.1);
+    const th = Math.abs(throttle);
+    const base = 42 + s * 62 + (boost ? 14 : 0) + th * 6;
+    this.osc1.frequency.setTargetAtTime(base, t, 0.12);
+    this.osc2.frequency.setTargetAtTime(base * 0.5, t, 0.12);
+    this.osc3.frequency.setTargetAtTime(base * 2.01, t, 0.12);
+    this.lfo.frequency.setTargetAtTime(6 + s * 14, t, 0.2);              // chug speeds up with the car
+    this.engFilter.frequency.setTargetAtTime(220 + s * 520 + th * 160, t, 0.15);
+    const moving = Math.min(s * 4, 1);                                     // fades in as soon as it rolls
+    this.engGain.gain.setTargetAtTime(0.008 + moving * (0.022 + s * 0.03) + th * 0.012, t, 0.18);
+    this.roadGain.gain.setTargetAtTime(Math.min(s, 1) * 0.05, t, 0.2);
     this.skidGain.gain.setTargetAtTime(Math.min(Math.max(slip - 0.35, 0) * 0.5, 0.28), t, 0.05);
     // wind breathes slowly, a bit louder at speed
     const gust = 0.6 + weather.wind * 0.9 + Math.max(weather.snow, 0) * 0.3;
@@ -194,11 +209,30 @@ class Sfx {
     }
   }
 
-  explosion() {
+  // Armed bomb: a sharp metallic tick-tick just before it blows (his trigger click)
+  fuse() {
     if (!this.ctx) return;
-    this.burst({ freq: 1200, q: 0.3, dur: 1.1, gain: 0.8, sweepTo: 120, type: "lowpass" });
-    this.burst({ freq: 300, q: 0.5, dur: 0.5, gain: 0.5 });
-    this.tone({ freq: 70, to: 28, dur: 0.9, gain: 0.5, attack: 0.005 });
+    [0, 0.13].forEach((d) => {
+      this.tone({ freq: 2600 + Math.random() * 400, dur: 0.05, gain: 0.07, type: "square", attack: 0.001, delay: d });
+      this.burst({ freq: 5200, q: 6, dur: 0.03, gain: 0.12, delay: d });
+    });
+  }
+
+  explosion(distance = 0) {
+    if (!this.ctx) return;
+    const k = Math.max(0.12, 1 - distance / 70); // quieter the further the blast is from the car
+    if (k <= 0.12 && distance > 90) return;
+    // sharp crack, the big boom, a long sub-bass rumble, then debris rattling down
+    this.burst({ freq: 3200, q: 0.4, dur: 0.12, gain: 0.7 * k, type: "highpass" });
+    this.burst({ freq: 1600, q: 0.3, dur: 1.6, gain: 0.95 * k, sweepTo: 90, type: "lowpass" });
+    this.burst({ freq: 260, q: 0.6, dur: 0.8, gain: 0.6 * k });
+    this.tone({ freq: 62, to: 22, dur: 1.6, gain: 0.6 * k, attack: 0.004 });
+    this.tone({ freq: 110, to: 40, dur: 0.5, gain: 0.3 * k, type: "triangle", attack: 0.003 });
+    this.burst({ freq: 420, q: 0.4, dur: 2.4, gain: 0.18 * k, sweepTo: 60, type: "lowpass", delay: 0.25 }); // rumble tail
+    for (let i = 0; i < 7; i++) {
+      const d = 0.35 + Math.random() * 1.4;
+      this.burst({ freq: 700 + Math.random() * 1600, q: 3, dur: 0.06 + Math.random() * 0.06, gain: (0.08 + Math.random() * 0.1) * k, delay: d });
+    }
   }
 
   whoosh() { if (this.ctx) this.burst({ freq: 400, q: 1.2, dur: 0.6, gain: 0.22, sweepTo: 2400 }); }
