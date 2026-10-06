@@ -39,40 +39,52 @@ const OFFSET = new THREE.Vector3(...CAM_OFFSET);
 const BASE_YAW = Math.atan2(CAM_OFFSET[0], CAM_OFFSET[2]);
 const BASE_PITCH = Math.asin(CAM_OFFSET[1] / OFFSET.length());
 const DIST = OFFSET.length();
-const PITCH_MIN = 0.18, PITCH_MAX = 1.35; // from just above the road to nearly straight down
+// Lowest tilt ~25° (a flatter view looks out across the whole island and draws far more of it,
+// which made the frame rate dip), highest nearly straight down
+const PITCH_MIN = 0.44, PITCH_MAX = 1.35;
 
 // Camera follows the car from a fixed, slightly isometric angle (like a toy diorama),
 // pulling back a little at speed. Dragging with the left mouse button turns it around the car.
+// The camera sits directly on its angle around the (smoothed) look point, so a drag moves it
+// straight away; only the look point and the zoom are eased. Cinematic shots blend in and out.
 function Follow({ carRef, revealRef }) {
   const look = useRef(new THREE.Vector3(...SPAWN));
   const want = useMemo(() => new THREE.Vector3(), []);
+  const chase = useMemo(() => new THREE.Vector3(), []);
   const zoom = useRef(1.2);
   const ang = useRef({ yaw: BASE_YAW, pitch: BASE_PITCH });
-  useFrame((st, dt) => {
+  const cineState = useRef({ blend: 0, position: new THREE.Vector3(), target: new THREE.Vector3() });
+  useFrame((st, rawDt) => {
     const rb = carRef.current;
     if (!rb) return;
+    const dt = Math.min(rawDt, 0.1); // (a long frame mustn't fling the camera)
     const t = rb.translation();
     const v = rb.linvel();
     // Close-up diorama framing on the intro screen, normal chase view once driving
     const r = revealRef.current;
     const base = r.started ? 1 : r.zoom ?? 1.05;
     zoom.current = THREE.MathUtils.damp(zoom.current, base + Math.min(Math.hypot(v.x, v.z) / 26, 1) * 0.3, r.started ? 1.4 : 6, dt);
-    // Drag angle, eased so the view glides instead of snapping
+    // Drag angle: a very light ease (≈30 ms) just to smooth out uneven mouse events
     const o = view.orbit, a = ang.current;
     o.pitch = THREE.MathUtils.clamp(o.pitch, PITCH_MIN - BASE_PITCH, PITCH_MAX - BASE_PITCH);
-    a.yaw = THREE.MathUtils.damp(a.yaw, BASE_YAW + o.yaw, 12, dt);
-    a.pitch = THREE.MathUtils.damp(a.pitch, BASE_PITCH + o.pitch, 12, dt);
-    // An area's cinematic shot (projects board) overrides the chase camera
-    const cine = view.cinematic;
-    const k = 1 - Math.exp(-(cine ? 2.2 : 6) * dt);
-    if (cine) look.current.lerp(want.set(...cine.target), k);
-    else look.current.lerp(want.set(t.x, Math.max(t.y, 0), t.z), k);
+    a.yaw = THREE.MathUtils.damp(a.yaw, BASE_YAW + o.yaw, 32, dt);
+    a.pitch = THREE.MathUtils.damp(a.pitch, BASE_PITCH + o.pitch, 32, dt);
+    // Chase camera
+    look.current.lerp(want.set(t.x, Math.max(t.y, 0), t.z), 1 - Math.exp(-6 * dt));
     const d = DIST * zoom.current;
-    const camTarget = cine ? want.set(...cine.position)
-      : want.set(Math.cos(a.pitch) * Math.sin(a.yaw), Math.sin(a.pitch), Math.cos(a.pitch) * Math.cos(a.yaw)).multiplyScalar(d).add(look.current);
-    // (follows more tightly while dragging, so turning the view feels direct)
-    st.camera.position.lerp(camTarget, 1 - Math.exp(-(cine ? 2.2 : view.dragging ? 14 : 4) * dt));
-    st.camera.lookAt(look.current);
+    chase.set(Math.cos(a.pitch) * Math.sin(a.yaw), Math.sin(a.pitch), Math.cos(a.pitch) * Math.cos(a.yaw)).multiplyScalar(d).add(look.current);
+    // An area's cinematic shot (projects board) takes over, blending in and back out
+    const cine = view.cinematic, cs = cineState.current;
+    if (cine) { cs.position.set(...cine.position); cs.target.set(...cine.target); }
+    cs.blend = THREE.MathUtils.damp(cs.blend, cine ? 1 : 0, 2.2, dt);
+    if (cs.blend < 0.001) {
+      st.camera.position.copy(chase);
+      st.camera.lookAt(look.current);
+    } else {
+      const e = cs.blend * cs.blend * (3 - 2 * cs.blend);
+      st.camera.position.copy(chase).lerp(cs.position, e);
+      st.camera.lookAt(want.copy(look.current).lerp(cs.target, e));
+    }
   });
   return null;
 }

@@ -11,7 +11,7 @@ const sans = Geist({ subsets: ["latin"], variable: "--font-sans" });
 const serif = Instrument_Serif({ subsets: ["latin"], weight: "400", style: ["normal", "italic"], variable: "--font-serif" });
 
 export const metadata = {
-  title: "Arghadeep Pakhira — AI/ML & Edge AI Engineer",
+  title: "Arghadeep Pakhira",
   description: "Portfolio of Arghadeep Pakhira — deep learning, Edge AI, LLM systems, medical imaging and Android.",
 };
 
