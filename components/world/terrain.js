@@ -82,7 +82,9 @@ export const terrain = (() => {
     }
     Bd[k] = depth;
     // Grass in noisy patches, kept off roads, beaches and water
-    G[k] = depth > 0.04 || d > rc - 12 || nearRoad(x, z, 3.5) ? 0 : smooth(0.3, 0.42, fbm(x * 0.045, z * 0.045));
+    // (6 m clear of the avenue centre lines: their road tiles carry sidewalks out to ±4 m and blades
+    //  growing up to 3.5 m spilled over the kerbs)
+    G[k] = depth > 0.04 || d > rc - 12 || nearRoad(x, z, 6) ? 0 : smooth(0.3, 0.42, fbm(x * 0.045, z * 0.045));
     let slab = 0;
     for (const p of PLAZAS) slab = Math.max(slab, 1 - smooth(p.r - 3, p.r, Math.hypot(x - p.x, z - p.z)));
     R[k] = slab > 0 ? slab * smooth(0.25, 0.55, fbm(x * 0.12 + 40, z * 0.12)) : 0; // broken up like his

@@ -86,7 +86,7 @@ function Lines({ carRef }) {
     u.uColor.value.copy(cycle.light).multiplyScalar(Math.min(cycle.lightIntensity, 1.3)).lerp(new THREE.Color(1, 1, 1), 0.5 + snowRatio * 0.3);
     u.uOpacity.value = lerp(0.45, 0.95, snowRatio);
   });
-  return <mesh geometry={geometry} material={material} frustumCulled={false} renderOrder={3} />;
+  return <mesh geometry={geometry} material={material} frustumCulled={false} renderOrder={3} userData={{ noMap: true }} />;
 }
 
 // A jagged bolt from the sky to the ground, as a camera-facing ribbon
@@ -136,7 +136,7 @@ function Lightning({ carRef }) {
     weather.flash = Math.max(weather.flash, 1 - d / 90);
     setTimeout(() => sfx.thunder(1 - d / 90), (d / 340) * 1000 * 6); // sound lags behind the flash
   });
-  return <mesh ref={mesh} geometry={useMemo(boltGeometry, [])} material={material} visible={false} renderOrder={4} />;
+  return <mesh ref={mesh} geometry={useMemo(boltGeometry, [])} material={material} visible={false} renderOrder={4} userData={{ noMap: true }} />;
 }
 
 export default function Precipitation({ carRef }) {

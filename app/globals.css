@@ -232,7 +232,6 @@ kbd { display: inline-block; min-width: 24px; padding: 3px 6px; margin-right: 3p
   .intro-arrow { display: none; }
   .intro-foot { flex-direction: column; gap: 8px; font-size: 18px; }
 }
-.minimap { display: block; border-radius: 50%; }
 /* Settings (gear, top right): every world option in one dropdown */
 .settings { position: relative; }
 .settings-btn { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 50%; background: rgba(255, 250, 246, .85); border: 1px solid var(--line); color: var(--text); backdrop-filter: blur(8px); transition: transform .2s, background .2s; }
@@ -248,27 +247,13 @@ kbd { display: inline-block; min-width: 24px; padding: 3px 6px; margin-right: 3p
 .setting b { font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: rgba(59, 31, 29, .08); white-space: nowrap; }
 .setting[aria-checked="true"] b { background: #7ee08a; color: #12361a; }
 .setting kbd { margin: 0; }
+.setting-info { flex-wrap: wrap; row-gap: 2px; cursor: default; }
+.setting-info:hover { background: none; }
+.setting-info small { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 500; color: var(--dim); }
 .setting-race b { background: #d8231c; color: #fff; }
 .setting-solid { background: var(--text); color: var(--bg); margin-top: 4px; }
 .setting-solid:hover { background: var(--text); opacity: .9; }
 .setting-solid b { background: rgba(255, 255, 255, .15); }
-/* Island map (M) */
-.map-overlay { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 16px; background: rgba(20, 14, 18, .55); backdrop-filter: blur(4px); animation: mapFade .25s ease both; }
-.map-card { display: grid; justify-items: center; gap: 10px; padding: 14px 16px 12px; border-radius: 26px; background: rgba(255, 250, 246, .94); border: 1px solid var(--line); box-shadow: 0 30px 80px -20px rgba(0, 0, 0, .5); animation: mapIn .35s cubic-bezier(.16, 1, .3, 1) both; }
-.map-head { display: flex; align-items: center; gap: 14px; width: 100%; }
-.map-head strong { font-size: 30px; line-height: 1; letter-spacing: .02em; }
-.map-head span { margin-left: auto; font-size: 13px; color: var(--dim); }
-.map-head span b { color: var(--text); }
-.map-close { width: 32px; height: 32px; border-radius: 50%; font-size: 22px; line-height: 1; color: var(--text); background: rgba(59, 31, 29, .08); }
-.map-close:hover { background: rgba(59, 31, 29, .16); }
-.map-legend { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; font-size: 12px; color: var(--dim); }
-.map-legend i { display: inline-block; width: 18px; height: 6px; border-radius: 3px; margin-left: 6px; }
-.map-legend .lg-car { width: 10px; height: 10px; border-radius: 50%; background: #e5423a; margin-left: 0; }
-.map-legend .lg-track { background: #4a474f; box-shadow: inset 0 0 0 1px #d8231c; }
-.map-legend .lg-trail { background: rgba(122, 74, 40, .55); }
-.map-legend kbd { margin: 0 2px; }
-@keyframes mapFade { from { opacity: 0; } }
-@keyframes mapIn { from { opacity: 0; transform: scale(.94) translateY(10px); } }
 .flip-hint { position: fixed; left: 50%; bottom: 22px; z-index: 22; transform: translateX(-50%); padding: 12px 20px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 14px; font-weight: 600; white-space: nowrap; animation: hintIn .4s ease both; }
 .flip-hint kbd { color: var(--text); margin: 0 4px; }
 .joy { position: fixed; left: 22px; bottom: 26px; z-index: 22; width: 120px; height: 120px; border-radius: 50%; background: rgba(255, 250, 246, .55); border: 2px solid rgba(59, 31, 29, .2); display: grid; place-items: center; touch-action: none; }
@@ -282,3 +267,37 @@ kbd { display: inline-block; min-width: 24px; padding: 3px 6px; margin-right: 3p
   .hud-hint { bottom: 170px; }
   .now-playing { bottom: 170px; }
 }
+/* Island map (M), after Bruno Simon's map modal (folio-2025, MIT: map.styl) */
+.bmap-backdrop { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 64px 16px 16px; background: rgba(18, 12, 20, .62); animation: mapFade .3s ease both; }
+.bmap { position: relative; width: min(1024px, calc(100vmin - 80px)); aspect-ratio: 1 / 1; background: radial-gradient(ellipse at top left, #251f2b, #1d1721); -webkit-user-select: none; user-select: none; animation: mapIn .35s cubic-bezier(.16, 1, .3, 1) both; }
+.bmap-container { position: absolute; inset: 0; overflow: hidden; }
+.bmap-container::after { content: ""; position: absolute; inset: 3px; border: 1px solid #fff; opacity: .35; pointer-events: none; }
+.bmap-texture { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: 0; transition: opacity .3s; }
+.bmap-texture.is-visible { opacity: 1; }
+.bmap-loading { position: absolute; inset: 0; display: grid; place-items: center; color: rgba(255, 255, 255, .6); font-size: 13px; letter-spacing: .1em; text-transform: uppercase; }
+/* close: the red tab sitting on top of the frame */
+.bmap-close { position: absolute; right: 10px; bottom: 100%; width: 50px; height: 44px; }
+.bmap-close-inner { position: absolute; top: 0; right: 0; display: grid; place-items: center; width: 100%; height: calc(100% + 4px); background: radial-gradient(ellipse at top right, #c21515, #46123b); transition: transform .15s; }
+.bmap-close-inner::after { content: ""; position: absolute; top: 3px; right: 3px; bottom: 0; left: 3px; border: 1px solid #fff; border-bottom: none; opacity: .35; transition: opacity .15s; }
+.bmap-close:hover .bmap-close-inner { transform: translateY(-4px); }
+.bmap-close:hover .bmap-close-inner::after { opacity: .8; }
+.bmap-close svg { width: 18px; height: 18px; margin-bottom: 4px; }
+/* car marker (his player sprite) */
+.bmap-player { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 2000; }
+.bmap-player::after { content: ""; position: absolute; width: 64px; height: 64px; top: -32px; left: -32px; background: url("/ui/map/player.webp") center / cover; }
+/* locations: white diamond pin, black name that pops up on hover */
+.bmap-location { --size: 40px; position: absolute; width: var(--size); height: var(--size); margin: calc(var(--size) / -2) 0 0 calc(var(--size) / -2); cursor: pointer; }
+.bmap-pin { --pin: 18px; position: absolute; top: calc(50% - var(--pin) / 2); left: calc(50% - var(--pin) / 2); width: var(--pin); height: var(--pin); background: #fff; border: 4px solid #251f2b; transform: rotate(45deg); box-shadow: 0 0 4px #251f2b77; transition: transform .2s; }
+.bmap-location:hover .bmap-pin, .bmap-location:focus-visible .bmap-pin { transform: rotate(45deg) scale(1.2); }
+.bmap-name-container { position: absolute; bottom: calc(100% - 4px); left: 50%; width: 0; display: flex; justify-content: center; pointer-events: none; }
+.bmap-name { padding: 2px 7px; background: #000; color: #fff; font-size: 13px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; white-space: nowrap; box-shadow: 0 0 4px #00000077; transform-origin: 50% 80%; transform: scale(0); transition: transform .3s cubic-bezier(.65, -1, .45, 1); }
+.bmap-location:hover .bmap-name, .bmap-location:focus-visible .bmap-name { transform: scale(1); transition-timing-function: cubic-bezier(.49, 2.2, .53, .75); }
+@media (hover: none) { .bmap-name { transform: scale(.8); } }
+@media (max-width: 520px) {
+  .bmap { width: calc(100vw - 24px); }
+  .bmap-pin { --pin: 12px; border-width: 3px; }
+  .bmap-name { font-size: 11px; }
+  .bmap-player::after { width: 40px; height: 40px; top: -20px; left: -20px; }
+}
+@keyframes mapFade { from { opacity: 0; } }
+@keyframes mapIn { from { opacity: 0; transform: scale(.96); } }

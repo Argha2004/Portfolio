@@ -403,7 +403,7 @@ function CameraShake({ camera }) {
 
 // ── Scattered all over the island: small clusters off the roads, out of the water and away
 // from the spawn and the areas; some single, some side by side, some stacked ──
-export function Bombs({ count = 26 }) {
+export function Bombs({ count = 54 }) {
   const items = useMemo(() => {
     const r = rng(404), out = [], centres = [];
     for (let tries = 0; tries < 900 && centres.length < count; tries++) {
@@ -411,14 +411,20 @@ export function Bombs({ count = 26 }) {
       const x = Math.cos(a) * d, z = Math.sin(a) * d;
       if (nearRoad(x, z, 2.5) || terrain.depth(x, z) > 0.02) continue;
       if (Math.hypot(x - SPAWN_POS[0], z - SPAWN_POS[2]) < 26) continue;
-      if (centres.some(([cx, cz]) => Math.hypot(cx - x, cz - z) < 14)) continue;
+      if (centres.some(([cx, cz]) => Math.hypot(cx - x, cz - z) < 11)) continue;
       centres.push([x, z]);
-      const kind = Math.floor(r() * 3), yaw = r() * Math.PI;
+      // single, a pair, a pair with one on top, or a 3-2-1 pyramid (the big chain reactions)
+      const kind = Math.floor(r() * 4), yaw = r() * Math.PI;
       const sx = Math.cos(yaw) * 0.62, sz = -Math.sin(yaw) * 0.62;
       if (kind === 0) out.push({ p: [x, 0.6, z], r: yaw });
-      else {
+      else if (kind < 3) {
         out.push({ p: [x - sx, 0.6, z - sz], r: yaw }, { p: [x + sx, 0.6, z + sz], r: yaw });
         if (kind === 2) out.push({ p: [x, 1.75, z], r: yaw + 0.3 });
+      } else {
+        for (let row = 0; row < 3; row++) for (let i = 0; i < 3 - row; i++) {
+          const o = (i - (2 - row) / 2) * 2;
+          out.push({ p: [x + sx * o, 0.6 + row * 1.12, z + sz * o], r: yaw });
+        }
       }
     }
     return out;

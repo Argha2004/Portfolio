@@ -19,7 +19,7 @@ There is also a conventional **classic view** at `/about` for anyone who'd rathe
   - A 4-minute day/night cycle.
   - Live weather: rain, snow and storms with lightning.
 - **Sound:** synthesised engine, impact and ambience effects, plus a background music playlist.
-- **Island map:** press <kbd>M</kbd>.
+- **Island map:** press <kbd>M</kbd> for a top-down view of the island (rendered live, so it matches the time of day). Click a pin to drive straight there.
 - **Settings menu (gear, top right):** sound, music, time of day, weather, graphics quality, race track, respawn and classic view.
 - **Touch support:** on-screen joystick and lower graphics settings on phones.
 
@@ -120,7 +120,7 @@ legacy/                Earlier design experiments (not used by the site)
 | `dayCycle.js`, `weather.js`, `Precipitation.js` | Day/night cycle, weather model, rain, snow and lightning |
 | `brunoShading.js`, `Reveal.js` | Global stylised shading and the intro reveal / fog pass |
 | `sound.js` | All sound effects and music |
-| `Minimap.js` | The island map (opened with <kbd>M</kbd>) |
+| `IslandMap.js`, `mapCapture.js` | The island map (<kbd>M</kbd>): a live top-down render with clickable pins |
 | `assets.js`, `preload.js` | List of every model and texture, preloaded in parallel |
 
 ## Editing content
@@ -131,7 +131,7 @@ legacy/                Earlier design experiments (not used by the site)
 
 ## Credits
 
-- **Bruno Simon:** the vehicle, trees, benches, lanterns, pole lights, fences, bricks, crates, and the projects / contact area models. Also the terrain, water, shading, weather and day-cycle techniques, adapted from [folio-2025](https://github.com/brunosimon/folio-2025). His code and models are MIT-licensed (`public/models/bruno/LICENSE-bruno-simon.md`). His personal and branded content (character, statue, career boards, award logos) is deliberately not used.
+- **Bruno Simon:** the vehicle, trees, benches, lanterns, pole lights, fences, bricks, crates, and the projects / contact area models. Also the terrain, water, shading, weather and day-cycle techniques, adapted from [folio-2025](https://github.com/brunosimon/folio-2025). The map screen follows his map modal and uses his car marker (`public/ui/map/player.webp`). His code and models are MIT-licensed (`public/models/bruno/LICENSE-bruno-simon.md`). His personal and branded content (character, statue, career boards, award logos) is deliberately not used.
 - **Music:** "Sudo", "Boy" and "Baguira" from Bruno Simon's portfolio, released under CC0 (`public/sounds/music/LICENSE-CC0.md`).
 - **Kenney:** City Kit Roads, Graveyard Kit, Mini Arena and Mini Forest from [kenney.nl](https://kenney.nl), CC0 (`License.txt` in each `public/models/<kit>/` folder).
 - **Sound effects:** synthesised in code (`components/world/sound.js`). No third-party audio files are used.

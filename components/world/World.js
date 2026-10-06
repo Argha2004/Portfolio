@@ -7,18 +7,19 @@ import { useProgress } from "@react-three/drei";
 import { profile } from "@/lib/data";
 import { TLink } from "../Transition";
 import { input, useKeyboard } from "./input";
-import { ALL_ZONE_IDS, SPAWN_POS } from "./zones";
+import { SPAWN_POS } from "./zones";
 import { FETCHED, IMAGES } from "./assets";
 import { gridSpot } from "./trackData";
 import { sfx } from "./sound";
 import { hand } from "./fonts";
 import ZonePanel from "./ZonePanel";
+import { detectGpu } from "./gpu";
 import { cycle, phaseName, skipPhase } from "./dayCycle";
 import { weather, nextWeatherMode } from "./weather";
 
 const Scene = dynamic(() => import("./Scene"), { ssr: false });
-// The map (and the terrain code it samples) only loads once the visitor opens it
-const Minimap = dynamic(() => import("./Minimap"), { ssr: false });
+// The map screen only loads once the visitor opens it
+const IslandMap = dynamic(() => import("./IslandMap"), { ssr: false });
 // Ask for the 3D scene's code as soon as this module runs, instead of after hydration
 if (typeof window !== "undefined") import("./Scene");
 
@@ -90,6 +91,7 @@ export default function World() {
     return () => { off(); clearTimeout(timer); };
   }, []);
   const [quality, setQuality] = useState("high");
+  const [gpu, setGpu] = useState(null);
   // Remember the last zone so the panel keeps its content while sliding closed
   const lastZone = useRef(null);
   if (zone) lastZone.current = zone;
@@ -105,12 +107,11 @@ export default function World() {
 
   // Island map (M) and the settings menu (gear, top right)
   const [mapOpen, setMapOpen] = useState(false);
-  const [mapSize, setMapSize] = useState(600);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef = useRef(null);
   useEffect(() => {
     if (!started) return;
-    import("./Minimap"); // warm it up so the first M opens instantly
+    import("./IslandMap"); // warm it up so the first M opens instantly
     const onKey = (e) => {
       if (e.target.closest?.("input, textarea, select, [contenteditable]")) return;
       if (e.code === "KeyM" && !e.repeat && !input.locked) { setMapOpen((o) => !o); setSettingsOpen(false); sfx.click(); }
@@ -119,12 +120,6 @@ export default function World() {
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
   }, [started]);
-  useEffect(() => {
-    const fit = () => setMapSize(Math.round(Math.min(innerWidth - 32, innerHeight - 150, 760)));
-    fit();
-    addEventListener("resize", fit);
-    return () => removeEventListener("resize", fit);
-  }, []);
   // Clicking anywhere outside the settings menu closes it
   useEffect(() => {
     if (!settingsOpen) return;
@@ -145,7 +140,11 @@ export default function World() {
     document.documentElement.classList.add("is-home");
     const isTouch = matchMedia("(hover: none)").matches;
     setTouch(isTouch);
-    if (isTouch) setQuality("low"); // phones get fewer effects for a smooth frame rate
+    // Which GPU the browser gave us: full effects on a dedicated card, lighter ones on an
+    // integrated GPU or a phone (switchable in Settings)
+    const g = detectGpu();
+    setGpu(g);
+    if (isTouch || g?.lowPower) setQuality("low");
     return () => document.documentElement.classList.remove("is-home");
   }, []);
 
@@ -184,6 +183,12 @@ export default function World() {
             <button type="button" className="setting" role="menuitem" onClick={() => setQuality((q) => (q === "high" ? "low" : "high"))} title="Lower effects if it runs slowly">
               <span>Quality</span><b>{quality === "high" ? "High" : "Low"}</b>
             </button>
+            {gpu && (
+              <div className="setting setting-info" title={gpu.name}>
+                <span>Graphics</span><b>{gpu.known ? (gpu.dedicated ? "Dedicated" : "Integrated") : "GPU"}</b>
+                <small>{gpu.name}</small>
+              </div>
+            )}
             <hr />
             <button type="button" className="setting" role="menuitem" onClick={() => { setMapOpen(true); setSettingsOpen(false); }}>
               <span>Map</span><kbd>M</kbd>
@@ -205,21 +210,7 @@ export default function World() {
           <span>Now playing<br /><b className={hand.className}>{song}</b></span>
         </div>
       )}
-      {started && mapOpen && (
-        <div className="map-overlay" onClick={() => setMapOpen(false)} role="dialog" aria-modal="true" aria-label="Island map">
-          <div className="map-card" onClick={(e) => e.stopPropagation()}>
-            <div className="map-head">
-              <strong className={hand.className}>The island</strong>
-              <span>Discovered <b>{discovered.size}</b> / {ALL_ZONE_IDS.length}</span>
-              <button type="button" className="map-close" onClick={() => setMapOpen(false)} aria-label="Close map">×</button>
-            </div>
-            <Minimap carRef={carRef} discovered={discovered} size={mapSize} />
-            <p className="map-legend">
-              <i className="lg-car" /> You <i className="lg-track" /> Race track <i className="lg-trail" /> Adventure trail · press <kbd>M</kbd> or <kbd>Esc</kbd> to close
-            </p>
-          </div>
-        </div>
-      )}
+      {started && mapOpen && <IslandMap carRef={carRef} onClose={() => setMapOpen(false)} />}
       {started && showKeys && <p className="hud-hint hud-keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrows drive · <kbd>Shift</kbd> boost · <kbd>Space</kbd> brake · <kbd>R</kbd> flip back · <kbd>H</kbd> horn · <kbd>M</kbd> map</p>}
       {started && !showKeys && !zone && !flipped && <p className="hud-hint">Explore the island · drive up to a dot and press Enter · try the ramps · mind the bombs</p>}
       {flipped && (

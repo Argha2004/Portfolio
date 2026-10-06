@@ -2,7 +2,10 @@
 import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { RigidBody, CuboidCollider } from "@react-three/rapier";
-import { Text, Text3D, Center } from "@react-three/drei";
+import { Text, Text3D, Center, useFont } from "@react-three/drei";
+import * as THREE from "three";
+import { cycle } from "./dayCycle";
+import { LightPools } from "./bruno";
 
 export const FONT = "/fonts/inter-800.woff";
 export const FONT_REG = "/fonts/inter-500.woff";
@@ -17,21 +20,53 @@ export function GroundText({ children, position, size = 0.9, rotation = 0, color
   );
 }
 
-// ───────── Physics letters you can crash into ─────────
-export function Letters({ word = "ARGHADEEP", x = 0, z = -9, size = 1.6, spacing = 1.55 }) {
-  const chars = [...word];
-  const start = x - ((chars.length - 1) * spacing) / 2;
-  return chars.map((ch, i) => (
-    <RigidBody key={i} colliders={false} position={[start + i * spacing, 0.9, z]} linearDamping={0.4} angularDamping={0.4}>
-      <CuboidCollider args={[0.62, 0.85, 0.28]} density={0.6} friction={0.6} />
-      <Center>
-        <Text3D font="/fonts/helvetiker_bold.typeface.json" size={size} depth={0.5} bevelEnabled bevelSize={0.03} bevelThickness={0.03} curveSegments={6} castShadow>
-          {ch}
-          <meshStandardMaterial color="#fff3e8" roughness={0.6} />
-        </Text3D>
-      </Center>
-    </RigidBody>
-  ));
+// ───────── Name sign: physics letters you can crash into ─────────
+// One or more rows (later rows sit in front, so they read top-to-bottom from the camera),
+// spaced by each glyph's real width. Chunky two-tone letters (cream faces, coral sides) that
+// turn into a neon sign at night: faces glow warm white, sides glow orange (picked up by the
+// bloom), and a soft pool of light spreads on the ground under each row.
+const FONT_3D = "/fonts/helvetiker_bold.typeface.json";
+const signFace = new THREE.MeshLambertMaterial({ color: "#fff3e8", emissive: "#ffe2b8", emissiveIntensity: 0 });
+const signSide = new THREE.MeshLambertMaterial({ color: "#ff6a4d", emissive: "#ff5a2e", emissiveIntensity: 0 });
+
+export function Letters({ lines = ["ARGHADEEP", "PAKHIRA"], x = 0, z = -9, size = 1.6, gap = 0.16, rowGap = 2.7 }) {
+  const font = useFont(FONT_3D);
+  const rows = useMemo(() => {
+    const { glyphs, resolution } = font.data;
+    return lines.map((line, r) => {
+      const chars = [...line].map((ch) => ({ ch, w: ((glyphs[ch]?.ha ?? 700) / resolution) * size }));
+      const width = chars.reduce((t, c) => t + c.w, 0) + gap * (chars.length - 1);
+      let cursor = x - width / 2;
+      const rz = z + r * rowGap;
+      const letters = chars.map((c) => { const cx = cursor + c.w / 2; cursor += c.w + gap; return { ...c, x: cx, z: rz }; });
+      return { letters, z: rz, width };
+    });
+  }, [font, lines, x, z, size, gap, rowGap]);
+  const pools = useMemo(() => rows.flatMap((row) => {
+    const n = Math.max(2, Math.round(row.width / 5));
+    return Array.from({ length: n }, (_, i) => [x - row.width / 2 + (row.width * (i + 0.5)) / n, 0, row.z]);
+  }), [rows, x]);
+  useFrame(() => {
+    const n = cycle.nightAmount;
+    signFace.emissiveIntensity = n * 1.25;
+    signSide.emissiveIntensity = 0.05 + n * 1.1;
+  });
+  const h = size * 0.72; // cap height of the bold face
+  return (
+    <>
+      {rows.flatMap((row) => row.letters.map((l, i) => l.ch === " " ? null : (
+        <RigidBody key={`${row.z}-${i}`} colliders={false} position={[l.x, h / 2 + 0.03, l.z]} linearDamping={0.4} angularDamping={0.4}>
+          <CuboidCollider args={[l.w * 0.46, h / 2, 0.38]} density={0.6} friction={0.6} />
+          <Center>
+            <Text3D font={FONT_3D} size={size} height={0.7} bevelEnabled bevelSize={0.05} bevelThickness={0.06} bevelSegments={3} curveSegments={10} material={[signFace, signSide]} castShadow receiveShadow>
+              {l.ch}
+            </Text3D>
+          </Center>
+        </RigidBody>
+      )))}
+      <LightPools points={pools} radius={4.5} color="#ff9a5c" strength={0.9} />
+    </>
+  );
 }
 
 // ───────── Zone pad: a glowing disc that detects the car ─────────

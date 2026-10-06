@@ -90,10 +90,15 @@ export const sectionPoint = (sec, lx, lz) => {
   return [sec.center[0] + lx * c + lz * s, sec.center[1] - lx * s + lz * c];
 };
 
-// Footprints of the two Bruno areas (projects forge, social plinth) and the sections, kept clear of scenery
+// The name sign (Props.js Letters): one line on the right of the road at the spawn, starting just past
+// the sidewalk; its footprint is kept clear of scenery and bombs
+export const NAME_SIGN = { x: 22, z: 20, size: 1.5 };
+
+// Footprints of the two Bruno areas (projects forge, social plinth), the sections and the name sign, kept clear of scenery
 const AREA_CIRCLES = [
   { x: -13.5, z: -46.5, r: 10 }, { x: 56, z: 24, r: 12 }, { x: 70, z: 11, r: 3 },
   ...Object.values(SECTIONS).map((s) => ({ x: s.center[0], z: s.center[1], r: s.r + 2 })),
+  ...[-8.5, 0, 8.5].map((dx) => ({ x: NAME_SIGN.x + dx, z: NAME_SIGN.z, r: 5.5 })),
 ];
 export const inArea = (x, z) => AREA_CIRCLES.some((c) => Math.hypot(x - c.x, z - c.z) < c.r);
 

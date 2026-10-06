@@ -9,7 +9,7 @@ import { EffectComposer, Bloom, N8AO, Vignette, SMAA } from "@react-three/postpr
 import * as THREE from "three";
 import { globeTags, profile } from "@/lib/data";
 import Car, { SPAWN } from "./Car";
-import { CAM_OFFSET, SUN_DIR, PROJECTS_SITE, SOCIAL_CENTER } from "./zones";
+import { CAM_OFFSET, SUN_DIR, PROJECTS_SITE, SOCIAL_CENTER, NAME_SIGN } from "./zones";
 import { ProjectsArea, SocialArea } from "./areas";
 import { GroundText, Letters } from "./Props";
 import { Floor, WaterSurface, TerrainCollider } from "./terrain";
@@ -21,6 +21,8 @@ import Trail from "./Trail";
 import { SkillsCamp, ResearchArena, DesignGraveyard, Village, Outskirts, SpawnGarden } from "./Districts";
 import { Campus, HallOfFame, EdgeLab } from "./Sections";
 import { Bombs, Fireballs } from "./Bombs";
+import { MapCapture } from "./mapCapture";
+import { createRenderer } from "./gpu";
 import { Reveal } from "./Reveal";
 import { sfx } from "./sound";
 import { view } from "./view";
@@ -133,7 +135,7 @@ export default function Scene({ carRef, lapRef, trailRef, revealRef, zone, setZo
   const zp = { zone, onEnter: enter, onExit: exit };
 
   return (
-    <Canvas shadows="soft" dpr={high ? [1, 1.5] : [1, 1]} camera={{ fov: 42, position: [SPAWN[0] + 9 * 1.2, 12 * 1.2, SPAWN[2] + 15 * 1.2], near: 0.5, far: 700 }} onCreated={({ camera }) => camera.lookAt(SPAWN[0], 0, SPAWN[2])} gl={{ antialias: false, powerPreference: "high-performance" }}>
+    <Canvas shadows="soft" dpr={high ? [1, 1.5] : [1, 1]} camera={{ fov: 42, position: [SPAWN[0] + 9 * 1.2, 12 * 1.2, SPAWN[2] + 15 * 1.2], near: 0.5, far: 700 }} onCreated={({ camera }) => camera.lookAt(SPAWN[0], 0, SPAWN[2])} gl={createRenderer}>
       <CycleDriver />
       <Sun carRef={carRef} />
 
@@ -151,8 +153,8 @@ export default function Scene({ carRef, lapRef, trailRef, revealRef, zone, setZo
           <Circuit carRef={carRef} lapRef={lapRef} />
           <Trail carRef={carRef} trailRef={trailRef} />
 
-          {/* Spawn: name in physics letters on the grass beside the south avenue */}
-          <Letters x={-17} z={22} />
+          {/* Spawn: the name in physics letters, one line on the right of the road */}
+          <Letters lines={["ARGHADEEP PAKHIRA"]} x={NAME_SIGN.x} z={NAME_SIGN.z} size={NAME_SIGN.size} />
           <GroundText position={[0, 0, 40]} size={0.5} opacity={0.6}>W A S D  /  ARROWS   ·   SHIFT BOOST   ·   SPACE BRAKE   ·   R FLIP BACK</GroundText>
           <GroundText position={[0, 0, -18]} size={0.9}>PROJECTS</GroundText>
           <GroundText position={[-30, 0, -6.5]} size={0.7}>SKILLS CAMP</GroundText>
@@ -180,6 +182,7 @@ export default function Scene({ carRef, lapRef, trailRef, revealRef, zone, setZo
         </Physics>
         <Particles carRef={carRef} />
         <Fireballs carRef={carRef} />
+        <MapCapture />
         <Precipitation carRef={carRef} />
       </Suspense>
 
