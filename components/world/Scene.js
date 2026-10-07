@@ -209,6 +209,14 @@ function CycleDriver() {
 // Shadow camera follows the car so shadows stay crisp everywhere on the island;
 // the sun swings around and dips with the cycle (his Lighting.update)
 const SUN_DIST = Math.hypot(...SUN_DIR);
+// TEMP-PERF: exposes the renderer, scene and physics world with ?perf (profiling only)
+function PerfProbe() {
+  const { gl, scene, camera } = useThree();
+  const { world } = useRapier();
+  useEffect(() => { if (location.search.includes("perf")) window.__perf = { gl, scene, camera, world }; }, [gl, scene, camera, world]);
+  return null;
+}
+
 // Anything knocked through the ground (or off the island) is switched off instead of falling
 // forever and costing a physics step every frame
 function FallGuard({ carRef }) {
@@ -280,6 +288,7 @@ function Scene({ carRef, lapRef, trailRef, revealRef, zone, setZone, onDiscover,
         <BladeGrass focusRef={carRef} />
 
         <Physics gravity={[0, -20, 0]}>
+          <PerfProbe />
           <FallGuard carRef={carRef} />
           <TerrainCollider />
           <Roads />

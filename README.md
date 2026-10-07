@@ -4,6 +4,11 @@ A drivable 3D portfolio. Instead of scrolling a page, visitors drive a little ca
 
 There is also a conventional **classic view** at `/about` for anyone who'd rather read than drive.
 
+
+<p align="center">
+  <img src="public/Main.png" alt="Home View of the Portfolio" width="900">
+</p>
+
 ## Features
 
 - **Open-world island:** roads, an F1-style race circuit, a 1.3 km adventure trail with obstacles, ponds you can splash through, and ramps.
