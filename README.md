@@ -87,7 +87,7 @@ npx vercel        # preview deployment (asks you to log in the first time)
 npx vercel --prod # production deployment
 ```
 
-The sitemap is served at `/sitemap.xml` (`app/sitemap.js`). On Vercel its links use the project's production domain automatically; with a custom domain, set the `NEXT_PUBLIC_SITE_URL` environment variable (e.g. `https://your-domain.com`) so the sitemap points there.
+The sitemap is served at `/sitemap.xml` (`app/sitemap.js`) and `robots.txt` at `/robots.txt` (`app/robots.js`, which points crawlers to the sitemap). On Vercel their links use the project's production domain automatically; with a custom domain, set the `NEXT_PUBLIC_SITE_URL` environment variable (e.g. `https://your-domain.com`) so they point there (`lib/site.js`).
 
 ## Project structure
 
