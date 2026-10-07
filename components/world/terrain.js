@@ -5,8 +5,10 @@ import { useTexture } from "@react-three/drei";
 import { RigidBody, HeightfieldCollider, CuboidCollider } from "@react-three/rapier";
 import * as THREE from "three";
 import { weather } from "./weather";
+import { cycle } from "./dayCycle";
 import { ISLAND_R, PONDS, pondEdge, nearRoad, DISTRICTS, SECTIONS, connectors } from "./zones";
-import { trailSamples, TRAIL_WIDTH, nearestTrailIndex } from "./trailData";
+import { trailSamples, TRAIL_WIDTH, nearestTrailIndex, nearTrail } from "./trailData";
+import { riverDist, RIVER_IN, RIVER_OUT, RIVER_DEPTH } from "./riverData";
 
 // ───────── Terrain & water, after Bruno Simon's folio-2025 (MIT) ─────────
 // Like his, the whole ground is driven by one RGBA data map:
@@ -79,6 +81,14 @@ export const terrain = (() => {
       if (dp >= p.r * POND_WOBBLE * 1.25) continue; // beyond the widest shore: no water
       const q = dp / pondEdge(p, x, z);
       depth = Math.max(depth, (1 - smooth(0.35, 1.25, q)) * (p.depth ?? 0.95));
+    }
+    // the river: full depth along the middle, shelving up to sandy banks
+    const dr = riverDist(x, z);
+    if (dr < RIVER_OUT) {
+      let river = (1 - smooth(RIVER_IN, RIVER_OUT, dr)) * RIVER_DEPTH;
+      // where a river crosses the adventure trail it spreads into a wheel-deep ford
+      if (nearTrail(x, z)) river = Math.min(river, 0.3);
+      depth = Math.max(depth, river);
     }
     Bd[k] = depth;
     // Grass in noisy patches, kept off roads, beaches and water
@@ -172,60 +182,113 @@ export function Floor() {
           base = mix(base, slab, vTerrain.r);
           vec4 diffuseColor = vec4(base, opacity);`);
     };
+    m.defines = { ...m.defines, B_NO_WATERLINE: "" };
     m.customProgramCacheKey = () => "bruno-floor";
     return m;
   }, [slabs]);
   const geometry = useMemo(() => {
     const size = HALF * 2 + 200; // past the map the data clamps to deep ocean
-    const g = new THREE.PlaneGeometry(size, size, 280, 280);
+    const g = new THREE.PlaneGeometry(size, size, 400, 400); // (fine enough for the rivers' banks)
     g.rotateX(-Math.PI / 2);
     return g;
   }, []);
   return <mesh geometry={geometry} material={material} receiveShadow />;
 }
 
-// ── Water surface: clear, except a breathing foam line at the shore and ripple contours ──
+// ── Water surface, after Bruno Simon's (folio-2025, MIT: World/WaterSurface.js + Terrain gradient) ──
+// The bed is already coloured by depth (sand → turquoise → navy, his gradient) on the floor below;
+// this plane at -0.3 m adds what makes it read as water:
+//  · a body tint that thickens with depth (clear in the shallows, deep navy offshore) with a slow
+//    shimmer of light across it (his surface blurs the bed; a tint + drifting light reads the same
+//    without rendering the scene twice)
+//  · his ripples: depth contours drifting in towards the shore, broken up by noise, bold near the
+//    shore and thinning out offshore
+//  · a white foam band that breathes along the water's edge
+//  · caustic light dancing over the shallow bed, and small sun glints
+//  · his rain splashes (rings popping up in random cells)
+// Everything is lit by the day / night cycle, so the water dims and turns blue at night.
 export function WaterSurface() {
   const material = useMemo(() => new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, fog: true,
-    uniforms: { uTerrain: { value: terrain.texture }, uHalf: { value: HALF }, uTime: { value: 0 }, uRain: { value: 0 }, ...THREE.UniformsLib.fog },
+    uniforms: {
+      uTerrain: { value: terrain.texture }, uHalf: { value: HALF }, uTime: { value: 0 }, uRain: { value: 0 },
+      uLight: { value: new THREE.Color(1, 1, 1) },
+      uShallow: { value: new THREE.Color("#7fe0d2") }, uDeep: { value: new THREE.Color("#0f2f57") },
+      ...THREE.UniformsLib.fog,
+    },
     vertexShader: `
       #include <fog_pars_vertex>
-      varying vec2 vXZ;
+      varying vec2 vXZ; varying vec3 vView;
       void main(){
         vXZ = (modelMatrix * vec4(position, 1.0)).xz;
         vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        vView = mvPosition.xyz;
         gl_Position = projectionMatrix * mvPosition;
         #include <fog_vertex>
       }`,
     fragmentShader: `
       #include <fog_pars_fragment>
-      uniform sampler2D uTerrain; uniform float uHalf; uniform float uTime; uniform float uRain; varying vec2 vXZ;
+      uniform sampler2D uTerrain; uniform float uHalf; uniform float uTime; uniform float uRain;
+      uniform vec3 uLight; uniform vec3 uShallow; uniform vec3 uDeep;
+      uniform mat4 projectionMatrix; // (three only declares it in vertex shaders; it sets it for both)
+      varying vec2 vXZ; varying vec3 vView;
       float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float noise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
         return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y); }
       void main(){
         float b = texture2D(uTerrain, vXZ / (2.0 * uHalf) + 0.5).b;
-        if (b < 0.2) discard;
-        // Ripples (his ripplesNode): thin depth contours drifting towards the shore, broken up by noise
-        // (the crisp shoreline itself is the white water line every surface draws at -0.3 m)
-        float wave = b * 9.0 + uTime * 0.35;
-        float n = noise(vXZ * 0.12 + floor(wave) * 2.9);
-        float line = smoothstep(0.465, 0.5, abs(fract(wave) - 0.5));
-        float ripple = line * step(0.55, n) * (1.0 - smoothstep(0.25, 0.7, b));
-        // Rain splashes (his water splashes): small rings popping up in a grid of random cells
+        if (b < 0.2) discard;                         // the ground is above the surface here
+        float d = clamp((b - 0.2) / 0.75, 0.0, 1.0);  // 0 at the water's edge → 1 in the deepest water
+        float t = uTime;
+
+        // Body: tint thickening with depth, with a slow drifting shimmer of light
+        vec3 tint = mix(uShallow, uDeep, smoothstep(0.0, 0.75, d));
+        float shimmer = noise(vXZ * 0.16 + vec2(t * 0.05, t * 0.03)) * noise(vXZ * 0.29 - vec2(t * 0.04, -t * 0.05));
+        tint *= 0.88 + 0.4 * shimmer;
+        float body = mix(0.16, 0.6, smoothstep(0.0, 0.8, d));
+
+        // Caustics over the shallow bed
+        vec2 q = vXZ * 0.6;
+        float c1 = noise(q + vec2(t * 0.32, t * 0.21)), c2 = noise(q * 1.35 - vec2(t * 0.24, -t * 0.29));
+        float caustic = pow(1.0 - abs(c1 - c2), 12.0) * (1.0 - smoothstep(0.05, 0.5, d));
+
+        // Ripples (his ripplesNode): contours drifting towards the shore, broken by noise
+        float wave = b * 10.0 + t * 0.5;
+        float n = noise(vXZ * 0.1 + floor(wave) * 2.9);
+        float thick = mix(0.2, 0.05, smoothstep(0.0, 0.55, d));
+        float ripple = step(fract(wave), thick) * step(0.45, n) * (1.0 - smoothstep(0.3, 0.7, d));
+
+        // Foam: a crisp white band along the water's edge that breathes in and out
+        float edge = 0.16 + 0.05 * sin(t * 1.4 + noise(vXZ * 0.35) * 6.28);
+        float foam = 1.0 - smoothstep(edge - 0.025, edge, d);
+
+        // Sun glints
+        float glint = step(0.94, noise(vXZ * 2.4 + vec2(t * 0.7, -t * 0.45))) * step(0.55, noise(vXZ * 0.5 - t * 0.15)) * smoothstep(0.1, 0.5, d);
+
+        // Rain splashes (his splashesNode): small rings popping up in random cells
         vec2 cell = floor(vXZ / 1.3), local = fract(vXZ / 1.3) - 0.5;
-        float rnd = hash(cell), life = fract(uTime * 0.9 + rnd * 7.0);
+        float rnd = hash(cell), life = fract(t * 0.9 + rnd * 7.0);
         vec2 c = (vec2(hash(cell + 3.1), hash(cell + 7.7)) - 0.5) * 0.5;
         float ring = 1.0 - smoothstep(0.0, 0.035, abs(length(local - c) - life * 0.38));
         float splash = ring * (1.0 - life) * step(1.0 - uRain, hash(cell + 11.0));
-        gl_FragColor = vec4(vec3(1.0), max(ripple * 0.85, splash * 0.8));
+
+        float white = max(max(ripple * 0.85, foam * 0.92), max(splash * 0.8, glint * 0.75));
+        vec3 col = mix(tint + caustic * 0.45, vec3(1.0), white) * uLight;
+        gl_FragColor = vec4(col, max(body + caustic * 0.3, white));
+        // Depth: drawn 0.35 m towards the camera, so the floor's coarse triangles can't poke
+        // through near the shore; the shoreline then follows the smooth terrain map (the discard)
+        vec4 clip = projectionMatrix * vec4(vView * (1.0 - 0.35 / max(length(vView), 1.0)), 1.0);
+        gl_FragDepth = clip.z / clip.w * 0.5 + 0.5;
         #include <fog_fragment>
       }`,
   }), []);
   useFrame((_, dt) => {
-    material.uniforms.uTime.value += dt;
-    material.uniforms.uRain.value = weather.rain * (weather.snow > 0.2 ? 0 : 1);
+    const u = material.uniforms;
+    u.uTime.value += dt;
+    u.uRain.value = weather.rain * (weather.snow > 0.2 ? 0 : 1);
+    // lit like everything else: the cycle's light colour × intensity, relative to full day
+    const k = cycle.lightIntensity / 1.2;
+    u.uLight.value.setRGB(Math.min(cycle.light.r * k, 1.3), Math.min(cycle.light.g * k, 1.3), Math.min(cycle.light.b * k, 1.3));
   });
   return (
     <mesh position-y={WATER_Y} rotation-x={-Math.PI / 2} material={material} renderOrder={1}>

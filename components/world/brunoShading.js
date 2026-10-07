@@ -103,9 +103,13 @@ const patch = /* glsl */ `
   outgoingLight += bBase * bLocal * 0.45;
 
   // White water line where the surface crosses the water plane
+  // (not on the terrain floor: its coarse triangles would draw a zigzag; the water surface draws
+  //  the shoreline foam there from the smooth terrain map instead)
+  #ifndef B_NO_WATERLINE
   float bDy = abs( bWorld.y - ( ${LOOK.waterY.toFixed(3)} ) );
   float bW = max( fwidth( bWorld.y ), 0.004 );
   outgoingLight = mix( outgoingLight, vec3( 1.0 ), 1.0 - smoothstep( 0.02, 0.02 + bW * 1.5, bDy ) );
+  #endif
 }
 #endif
 `;

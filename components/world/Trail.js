@@ -5,6 +5,7 @@ import { Text } from "@react-three/drei";
 import { RigidBody, CuboidCollider } from "@react-three/rapier";
 import { trailSamples, TRAIL_N, TRAIL_START, TRAIL_WIDTH, FORD_INDEX, nearestTrailIndex } from "./trailData";
 import { Ramp } from "./Atmosphere";
+import { inRiver } from "./riverData";
 import { ExplosiveCrate } from "./Bombs";
 import { BrickWall, Fences, Lanterns, PoleLights } from "./bruno";
 import { Dynamic, model, SCALE } from "./kit";
@@ -26,6 +27,7 @@ function layout() {
   for (let i = TRAIL_START + 45; i < TRAIL_START + TRAIL_N - 30; i += 50) {
     const idx = i % TRAIL_N;
     if (Math.abs(idx - FORD_INDEX) < 22) continue;
+    if (inRiver(at(idx).p.x, at(idx).p.z, 12)) continue; // (the rivers' fords)
     out.push({ kind: KINDS[k++ % KINDS.length], i: idx });
   }
   return out;

@@ -2,7 +2,7 @@ import * as THREE from "three";
 import gsap from "gsap";
 
 // ───────── Day / night cycle, after Bruno Simon's folio-2025 (MIT: Cycles/DayCycles.js) ─────────
-// Same four presets and the same keyframes over a 4-minute loop that follows the clock, so every
+// Same four presets and the same keyframes over a 10-minute loop that follows the clock, so every
 // visitor at the same moment sees the same time of day:
 //   day (0 – 0.15) → dusk (0.25) → night (0.35 – 0.6) → dawn (0.8) → day (0.9)
 // Each preset sets the light colour + intensity, the shadow tint, the fog gradient and fog range,
@@ -18,7 +18,7 @@ export const PRESETS = {
 const KEYS = [
   ["day", 0.0], ["day", 0.15], ["dusk", 0.25], ["night", 0.35], ["night", 0.6], ["dawn", 0.8], ["day", 0.9], ["day", 1.0],
 ];
-export const DURATION = 4 * 60; // seconds, like his
+export const DURATION = 10 * 60; // seconds (his is 4 min; slower here so a visit isn't mostly night)
 
 // His fog distances are ratios of a near→far span; these map his dawn values onto the
 // 28 m → 130 m range this world was tuned with.

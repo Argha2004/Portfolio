@@ -6,6 +6,7 @@ import { asphaltTexture } from "./Circuit";
 import { TRACK_WIDTH, RUNOFF } from "./trackData";
 import { Instanced, Placed, model, SCALE } from "./kit";
 import { PoleLights } from "./bruno";
+import { inRiver, nearBridge } from "./riverData";
 
 // Auto-tiling: each road cell picks straight / bend / T / crossroad / dead-end and a rotation
 // from which neighbours are road. Base tiles (seen from above, north up) are open on:
@@ -52,7 +53,8 @@ export default function Roads() {
     for (let i = 3; i < Math.min(...Object.values(avenueEnds)); i += 2) {
       for (const sgn of [-1, 1]) {
         const c = sgn * i * CELL;
-        items.push({ p: [5, 0, c], r: 0 }, { p: [-5, 0, c], r: 0 }, { p: [c, 0, -5], r: 0 }, { p: [c, 0, 5], r: 0 });
+        // (none on the river bridge or in the water)
+        [[5, c], [-5, c], [c, -5], [c, 5]].forEach(([x, z]) => { if (!inRiver(x, z, 1) && !nearBridge(x, z)) items.push({ p: [x, 0, z], r: 0 }); });
       }
     }
     return items;

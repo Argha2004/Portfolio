@@ -1,5 +1,6 @@
 import { nearTrack, samples, TRACK_WIDTH, RUNOFF } from "./trackData";
 import { nearTrail, FORD } from "./trailData";
+import { inRiver, nearBridge, RIVER_SOURCES, EXTRA_PONDS } from "./riverData";
 
 // ───────── World layout ─────────
 // The world sits on a grid of 8 m road cells (one Kenney road tile at ×8).
@@ -54,6 +55,8 @@ export const PONDS = [
   { x: 21, z: 76, r: 8 },
   { x: -33, z: -84, r: 8 },
   { ...FORD },                        // shallow water crossing on the adventure trail
+  ...RIVER_SOURCES.map((p) => ({ ...p, depth: 0.85 })),  // the rivers' source lakes (riverData.js)
+  ...EXTRA_PONDS,
 ];
 // Distance-to-edge test with the same wobble the terrain uses for its shoreline
 export const pondEdge = (p, x, z) => {
@@ -67,11 +70,13 @@ export function inPond(x, z, margin = 0) {
   });
 }
 
-// Is a world position on (or right next to) a road, the circuit or a pond? Keeps decoration off them.
+// Is a world position on (or right next to) a road, the circuit, a pond, the river or a bridge?
+// Keeps decoration off them.
 export function nearRoad(x, z, margin = 6) {
   const span = AVENUE * CELL + margin;
   const onAvenue = (Math.abs(x) < margin && Math.abs(z) < span) || (Math.abs(z) < margin && Math.abs(x) < span);
-  return onAvenue || Math.hypot(x, z) < 18 || nearTrack(x, z) || inPond(x, z, margin * 0.5 + 2) || inArea(x, z) || nearTrail(x, z);
+  return onAvenue || Math.hypot(x, z) < 18 || nearTrack(x, z) || inPond(x, z, margin * 0.5 + 2) || inArea(x, z) || nearTrail(x, z)
+    || inRiver(x, z, margin * 0.5 + 1) || nearBridge(x, z);
 }
 
 // Sections out between the circuit and the adventure trail (see Sections.js). The camera always

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import gsap from "gsap";
-import { cycle } from "./dayCycle";
+import { cycle, DURATION } from "./dayCycle";
 
 // ───────── Weather, after Bruno Simon's folio-2025 (MIT: Weather.js, Cycles/YearCycles.js) ─────────
 // Same model as his: a year cycle (real date → winter / spring / summer / fall presets) and the
@@ -68,7 +68,8 @@ let last = performance.now();
 export function updateWeather() {
   const now = performance.now(), dt = Math.min((now - last) / 1000, 0.1);
   last = now;
-  const t = cycle.absolute;
+  // (in units of his 4-minute days, so the weather keeps his pace whatever our day length is)
+  const t = cycle.absolute * (DURATION / 240);
   const yearP = (Date.now() / 1000 / (60 * 60 * 24 * 365)) % 1;
   const year = season(yearP);
   const o = weather.override;

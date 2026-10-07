@@ -70,7 +70,7 @@ export default function World() {
   const [race, setRace] = useState(0);
   const [muted, setMuted] = useState(false);
   const [musicOn, setMusicOn] = useState(true);
-  // Time of day (Bruno's 4-minute day / night cycle), shown on a HUD chip that skips ahead
+  // Time of day (Bruno's day / night cycle, here a 10-minute loop), shown on a HUD chip that skips ahead
   // (starts as a fixed value: the page is prerendered, so reading the clock here would make the
   // server HTML and the first client render disagree; the interval below sets the real phase)
   const [phase, setPhase] = useState("Day");
@@ -177,7 +177,7 @@ export default function World() {
             <button type="button" className="setting" role="menuitemcheckbox" aria-checked={musicOn} onClick={() => { const m = !musicOn; setMusicOn(m); sfx.setMusic(m); }} title="Music by Bruno Simon (CC0)">
               <span>Music</span><b>{musicOn ? "On" : "Off"}</b>
             </button>
-            <button type="button" className="setting" role="menuitem" onClick={skipPhase} title="Skip to the next time of day (the cycle runs every 4 minutes)">
+            <button type="button" className="setting" role="menuitem" onClick={skipPhase} title="Skip to the next time of day (the cycle runs every 10 minutes)">
               <span>Time of day</span><b>{{ Day: "☀", Dusk: "◐", Night: "☾", Dawn: "◑" }[phase]} {phase}</b>
             </button>
             <button type="button" className="setting" role="menuitem" onClick={() => { nextWeatherMode(); setSky((p) => ({ ...p, mode: weather.mode })); }} title="Auto follows the weather model; click to force Clear, Rain, Storm or Snow">
